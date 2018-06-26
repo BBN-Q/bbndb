@@ -3,6 +3,8 @@
 from . import qgl
 from . import auspex
 
+database = None
+
 def define_entities(db):
 	auspex.define_entities(db)
 	qgl.define_entities(db)
