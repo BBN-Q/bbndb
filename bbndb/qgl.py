@@ -49,7 +49,7 @@ def define_entities(db):
     class Digitizer(db.Entity):
         label           = Required(str)
         address         = Optional(str)
-        # stream_types    = Set(str)
+        stream_types    = Required(str, default="Raw")
         channels        = Set("ReceiverChannel")
         trigger_source  = Required(str, default="External", py_check=lambda x: x in ['External', 'Internal'])
         channel_db      = Optional("ChannelDatabase")
