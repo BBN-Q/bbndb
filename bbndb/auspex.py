@@ -1,4 +1,5 @@
 from pony.orm import *
+import networkx as nx
 
 # Get these in global scope for module imports
 Connection       = None
@@ -105,8 +106,10 @@ def define_entities(db):
 
     class Write(OutputProxy):
         """Writes data to file."""
-        filename  = Optional(str)
-        groupname = Optional(str)
+        filename      = Required(str,  default = "auspex_default.h5")
+        groupname     = Required(str,  default = "main")
+        add_date      = Required(bool, default = False)
+        save_settings = Required(bool, default = True)
 
     class QubitProxy(NodeProxy):
         """docstring for FilterProxy"""
