@@ -32,11 +32,21 @@ def define_entities(db):
         def __repr__(self):
             return str(self)
         def __str__(self):
-            return "{0}('{1}')".format(self.__class__.__name__, self.label)
+            return f"{self.__class__.__name__}('{self.label}')"
+
+    class Instrument(db.Entity):
+        label      = Required(str)
+        model      = Required(str)
+        address    = Optional(str)
+        parameters = Required(Json, default={})
+        def __repr__(self):
+            return str(self)
+        def __str__(self):
+            return f"{self.__class__.__name__}('{self.label}')"
 
     class MicrowaveSource(db.Entity):
         label           = Required(str)
-        source_type     = Required(str)
+        model           = Required(str)
         address         = Optional(str)
         power           = Optional(float)
         logical_channel = Optional("PhysicalChannel")
@@ -44,15 +54,18 @@ def define_entities(db):
         def __repr__(self):
             return str(self)
         def __str__(self):
-            return "{0}('{1}')".format(self.__class__.__name__, self.label)
+            return f"{self.__class__.__name__}('{self.label}')"
 
     class Digitizer(db.Entity):
         label           = Required(str)
+        model           = Required(str)
         address         = Optional(str)
         stream_types    = Required(str, default="Raw")
         channels        = Set("ReceiverChannel")
         trigger_source  = Required(str, default="External", py_check=lambda x: x in ['External', 'Internal'])
         channel_db      = Optional("ChannelDatabase")
+        record_length   = Required(int, default=1024)
+        sampling_rate   = Required(float, default=1e9)
         # nbr_segments     = Required(int, default=1) # This should be automatic
         # nbr_round_robins = Required(int, default=100) # This should be automatic
         # acquire_mode     = Required(str,default="digitizer", py_check=lambda x: x in ['digitizer', 'averager'])
@@ -64,10 +77,11 @@ def define_entities(db):
         def __repr__(self):
             return str(self)
         def __str__(self):
-            return "{0}('{1}')".format(self.__class__.__name__, self.label)
+            return f"{self.__class__.__name__}('{self.label}')"
 
     class AWG(db.Entity):
         label            = Required(str)
+        model            = Required(str)
         address          = Optional(str)
         channels         = Set("PhysicalChannel", reverse="awg")
         trigger_interval = Required(float, default=100e-6)
@@ -83,7 +97,7 @@ def define_entities(db):
         def __repr__(self):
             return str(self)
         def __str__(self):
-            return "{0}('{1}')".format(self.__class__.__name__, self.label)
+            return f"{self.__class__.__name__}('{self.label}')"
 
     class Channel(db.Entity):
         '''
@@ -95,7 +109,7 @@ def define_entities(db):
         def __repr__(self):
             return str(self)
         def __str__(self):
-            return "{0}('{1}')".format(self.__class__.__name__, self.label)
+            return f"{self.__class__.__name__}('{self.label}')"
 
     class PhysicalChannel(Channel):
         '''
@@ -157,8 +171,9 @@ def define_entities(db):
         A trigger input on a receiver.
         '''
         triggering_channel = Optional(LogicalChannel)
-        channel            = Optional(int)
-        stream_type        = Required(str, default="Raw", py_check=lambda x: x.lower() in["raw", "demodulated", "integrated", "averaged"])
+        channel            = Required(int)
+        dsp_channel        = Optional(int)
+        stream_type        = Required(str, default="Raw", py_check=lambda x: x in["Raw", "Demodulated", "Integrated", "Averaged"])
         if_freq            = Required(float, default=0.0)
         kernel             = Optional(str)
         kernel_bias        = Required(float, default=0.0)
