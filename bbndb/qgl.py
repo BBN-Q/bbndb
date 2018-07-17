@@ -49,6 +49,7 @@ def define_entities(db):
         model           = Required(str)
         address         = Optional(str)
         power           = Optional(float)
+        frequency       = Optional(float)
         logical_channel = Optional("PhysicalChannel")
         channel_db      = Optional("ChannelDatabase")
         def __repr__(self):
