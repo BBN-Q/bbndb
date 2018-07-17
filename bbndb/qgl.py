@@ -79,6 +79,8 @@ def define_entities(db):
             return str(self)
         def __str__(self):
             return f"{self.__class__.__name__}('{self.label}')"
+        def __getitem__(self, value):
+            return self.get_chan(value)
 
     class AWG(db.Entity):
         label            = Required(str)
@@ -99,6 +101,8 @@ def define_entities(db):
             return str(self)
         def __str__(self):
             return f"{self.__class__.__name__}('{self.label}')"
+        def __getitem__(self, value):
+            return self.get_chan(value)
 
     class Channel(db.Entity):
         '''
