@@ -22,6 +22,7 @@ def define_entities(db):
         pipeline_name = Required(str)
 
     class NodeProxy(db.Entity):
+        label           = Optional(str)
         qubit_name      = Optional(str)
         connection_to   = Set(Connection, reverse='node1')
         connection_from = Set(Connection, reverse='node2')
@@ -29,8 +30,8 @@ def define_entities(db):
     class FilterProxy(NodeProxy):
         """docstring for FilterProxy"""
         
-        def __init__(self):
-            super(FilterProxy, self).__init__()
+        def __init__(self, **kwargs):
+            super(FilterProxy, self).__init__(**kwargs)
             self.exp = None
 
         def add(self, filter_obj):
@@ -42,11 +43,22 @@ def define_entities(db):
             filter_obj.qubit_name = self.qubit_name
             return filter_obj
 
-        def label(self):
-            return f"{self.__class__.__name__}" # for {self.qubit_name}"
-        
+        def node_label(self):
+            return f"{self.__class__.__name__} {self.label}\n({self.qubit_name})"
+
         def __repr__(self):
-            return f"{self.__class__.__name__} for {self.qubit_name} at {hex(id(self))}"
+            return f"{self.__class__.__name__} {self.label} ({self.qubit_name})"
+
+        def __getitem__(self, key):
+            ss = list(self.exp.meas_graph.successors(self))
+            label_matches = [s for s in ss if s.label == key]
+            class_matches = [s for s in ss if s.__class__.__name__ == key]
+            if len(label_matches) == 1:
+                return label_matches[0]
+            elif len(class_matches) == 1:
+                return class_matches[0]
+            else:
+                raise ValueError("Could not find suitable filter by label or by class")
         
     class Demodulate(FilterProxy):
         """Digital demodulation and filtering to select a signal at a particular frequency component. This 
@@ -150,31 +162,42 @@ def define_entities(db):
             self.exp.meas_graph.remove_nodes_from(desc)
 
         def auto_create_pipeline(self):
-            if self.stream_type == "raw":
+            if self.stream_type.lower() == "raw":
                 self.add(Demodulate()).add(Integrate()).add(Average()).add(Write())
-            if self.stream_type == "demodulated":
+            if self.stream_type.lower() == "demodulated":
                 self.add(Integrate()).add(Average()).add(Write())
-            if self.stream_type == "integrated":
+            if self.stream_type.lower() == "integrated":
                 self.add(Average()).add(Write())
-            if self.stream_type == "averaged":
+            if self.stream_type.lower() == "averaged":
                 self.add(Write())
             
         def show_pipeline(self):
             desc = list(nx.algorithms.dag.descendants(self.exp.meas_graph, self)) + [self]
-            labels = {n: n.label() for n in desc}
+            labels = {n: n.node_label() for n in desc}
             subgraph = self.exp.meas_graph.subgraph(desc)
             colors = ["#3182bd" if isinstance(n, QubitProxy) else "#ff9933" for n in subgraph.nodes()]
-            plot_graph(subgraph, labels, colors=colors, prog='dot')
+            self.exp.plot_graph(subgraph, labels, colors=colors, prog='dot')
             
         def show_connectivity(self):
             pass
             
-        def label(self):
+        def node_label(self):
             return self.__repr__()
             
         def __repr__(self):
             return f"Qubit {self.qubit_name}"
 
+        def __getitem__(self, key):
+            ss = list(self.exp.meas_graph.successors(self))
+            label_matches = [s for s in ss if s.label == key]
+            class_matches = [s for s in ss if s.__class__.__name__ == key]
+            if len(label_matches) == 1:
+                return label_matches[0]
+            elif len(class_matches) == 1:
+                return class_matches[0]
+            else:
+                raise ValueError("Could not find suitable filter by label or by class")
+        
     globals()["Connection"] = Connection
     globals()["NodeProxy"] = NodeProxy
     globals()["FilterProxy"] = FilterProxy
