@@ -58,17 +58,18 @@ def define_entities(db, cache_callback=None):
             return f"{self.__class__.__name__}('{self.label}')"
 
     class Digitizer(db.Entity):
-        label           = Required(str)
-        model           = Required(str)
-        address         = Optional(str)
-        stream_types    = Required(str, default="Raw")
-        channels        = Set("ReceiverChannel")
-        trigger_source  = Required(str, default="External", py_check=lambda x: x in ['External', 'Internal'])
-        channel_db      = Optional("ChannelDatabase")
-        record_length   = Required(int, default=1024)
-        sampling_rate   = Required(float, default=1e9)
-        # nbr_segments     = Required(int, default=1) # This should be automatic
-        # nbr_round_robins = Required(int, default=100) # This should be automatic
+        label            = Required(str)
+        model            = Required(str)
+        address          = Optional(str)
+        stream_types     = Required(str, default="Raw")
+        channels         = Set("ReceiverChannel")
+        trigger_source   = Required(str, default="External", py_check=lambda x: x in ['External', 'Internal'])
+        channel_db       = Optional("ChannelDatabase")
+        record_length    = Required(int, default=1024)
+        sampling_rate    = Required(float, default=1e9)
+        number_segments  = Required(int, default=1) # This should be automatic
+        number_waveforms = Required(int, default=1) # This should be automatic
+        number_averages  = Required(int, default=100) # This should be automatic
         # acquire_mode     = Required(str,default="digitizer", py_check=lambda x: x in ['digitizer', 'averager'])
 
         def get_chan(self, name):
@@ -92,6 +93,7 @@ def define_entities(db, cache_callback=None):
         delay            = Required(float, default=0.0)
         master           = Required(bool, default=False)
         channel_db       = Optional("ChannelDatabase")
+        sequence_file    = Optional(str)
 
         def get_chan(self, name):
             return self.channels.select(lambda x: x.label.endswith(name)).first()
