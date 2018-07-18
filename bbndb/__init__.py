@@ -5,6 +5,6 @@ from . import auspex
 
 database = None
 
-def define_entities(db):
+def define_entities(db, cache_callback=None):
 	auspex.define_entities(db)
-	qgl.define_entities(db)
+	qgl.define_entities(db, cache_callback=cache_callback)

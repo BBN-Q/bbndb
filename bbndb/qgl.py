@@ -20,7 +20,7 @@ ChannelDatabase = None
 Digitizer = None
 AWG = None
 
-def define_entities(db):
+def define_entities(db, cache_callback=None):
 
     class ChannelDatabase(db.Entity):
         label      = Required(str)
@@ -70,7 +70,7 @@ def define_entities(db):
         # nbr_segments     = Required(int, default=1) # This should be automatic
         # nbr_round_robins = Required(int, default=100) # This should be automatic
         # acquire_mode     = Required(str,default="digitizer", py_check=lambda x: x in ['digitizer', 'averager'])
-        
+
         def get_chan(self, name):
             return self.channels.select(lambda x: x.label.endswith(name)).first()
         def ch(self, name):
@@ -115,6 +115,12 @@ def define_entities(db):
             return str(self)
         def __str__(self):
             return f"{self.__class__.__name__}('{self.label}')"
+        def __setattr__(self, attr, value):
+            if cache_callback:
+                if attr in [a.name for a in self._attrs_]:
+                    cache_callback()
+            super(Channel, self).__setattr__(attr, value)
+
 
     class PhysicalChannel(Channel):
         '''
@@ -146,7 +152,7 @@ def define_entities(db):
         #During initilization we may just have a string reference to the channel
         phys_chan     = Optional(PhysicalChannel)
         frequency     = Required(float, default=0.0)
-        pulse_params  = Optional(Json, default={}) 
+        pulse_params  = Optional(Json, default={})
         gate_chan     = Optional("LogicalMarkerChannel")
         receiver_chan = Optional("ReceiverChannel")
 
@@ -189,7 +195,7 @@ def define_entities(db):
     def pulse_check(name):
         return name in ["constant", "gaussian", "drag", "gaussOn", "gaussOff", "dragGaussOn", "dragGaussOff",
                        "tanh", "exp_decay", "autodyne", "arb_axis_drag"]
-        
+
     class LogicalMarkerChannel(LogicalChannel):
         '''
         A class for digital channels for gating sources or triggering other things.
@@ -254,7 +260,7 @@ def define_entities(db):
         # allow string in source and target so that we can store a label or an object
         source = Required(Qubit)
         target = Required(Qubit)
-        
+
         def __init__(self, **kwargs):
             if "pulse_params" not in kwargs.keys():
                 kwargs["pulse_params"] =   {'length': 20e-9,
