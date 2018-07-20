@@ -72,6 +72,7 @@ def define_entities(db, cache_callback=None):
         number_averages  = Required(int, default=100) # This should be automatic
         # acquire_mode     = Required(str,default="digitizer", py_check=lambda x: x in ['digitizer', 'averager'])
 
+        @db_session
         def get_chan(self, name):
             return self.channels.select(lambda x: x.label.endswith(name)).first()
         def ch(self, name):
@@ -95,6 +96,7 @@ def define_entities(db, cache_callback=None):
         channel_db       = Optional("ChannelDatabase")
         sequence_file    = Optional(str)
 
+        @db_session
         def get_chan(self, name):
             return self.channels.select(lambda x: x.label.endswith(name)).first()
         def ch(self, name):
