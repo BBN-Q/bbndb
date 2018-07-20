@@ -1,5 +1,6 @@
 from pony.orm import *
 import networkx as nx
+from functools import wraps
 
 # Get these in global scope for module imports
 Connection       = None
@@ -16,6 +17,19 @@ stream_hierarchy = None
 
 def define_entities(db):
 
+    def localize_db_objects(f):
+        """Since we can't mix db objects from separate sessions, re-fetch entities by their unique IDs"""
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            with db_session:
+                args_info    = [(type(arg), arg.id) if isinstance(arg, db.Entity) else (arg, None) for arg in args]
+                kwargs_info  = {k: (type(v), v.id) if isinstance(v, db.Entity) else (v, None) for k, v in kwargs.items()}
+            with db_session:
+                new_args   = [c[i] if i else c for c, i in args_info]
+                new_kwargs = {k: v[0][v[1]] if v[1] else v[0] for k,v in kwargs_info.items()}
+                return f(*new_args, **new_kwargs)
+        return wrapper
+
     class Connection(db.Entity):
         node1         = Required("NodeProxy")
         node2         = Required("NodeProxy")
@@ -31,16 +45,20 @@ def define_entities(db):
         """docstring for FilterProxy"""
 
         def __init__(self, **kwargs):
-            super(FilterProxy, self).__init__(**kwargs)
+            with db_session:
+                super(FilterProxy, self).__init__(**kwargs)
             self.exp = None
 
         def add(self, filter_obj):
             if not self.exp:
                 print("This filter may have been orphaned by a clear_pipeline call!")
                 return
+
+            commit() # Make sure filter_obj is in the db
             self.exp.meas_graph.add_edge(self, filter_obj)
             filter_obj.exp = self.exp
-            filter_obj.qubit_name = self.qubit_name
+            with db_session:
+                FilterProxy[filter_obj.id].qubit_name = self.qubit_name
             return filter_obj
 
         def node_label(self):
@@ -129,19 +147,22 @@ def define_entities(db):
         def __init__(self, exp, qubit_name):
             super(QubitProxy, self).__init__(qubit_name=qubit_name)
             self.exp = exp
-            self.qubit_name = qubit_name
+            # self.qubit_name = qubit_name
             self.digitizer_settings = None
             self.available_streams = None
             self.stream_type = None
 
+        # @localize_db_objects
         def add(self, filter_obj):
             if not self.exp:
                 print("This qubit may have been orphaned!")
                 return
 
+            commit() # Make sure filter_obj is in the db
             self.exp.meas_graph.add_edge(self, filter_obj)
             filter_obj.exp = self.exp
-            filter_obj.qubit_name = self.qubit_name
+            with db_session:
+                FilterProxy[filter_obj.id].qubit_name = self.qubit_name
             return filter_obj
 
         def set_stream_type(self, stream_type):
