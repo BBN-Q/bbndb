@@ -15,6 +15,8 @@ Write            = None
 QubiteProxy      = None
 stream_hierarchy = None
 
+__current_exp__ = None
+
 def define_entities(db):
 
     def localize_db_objects(f):
@@ -45,9 +47,10 @@ def define_entities(db):
         """docstring for FilterProxy"""
 
         def __init__(self, **kwargs):
+            global __current_exp__
             with db_session:
                 super(FilterProxy, self).__init__(**kwargs)
-            self.exp = None
+            self.exp = __current_exp__
 
         def add(self, filter_obj):
             if not self.exp:
@@ -55,11 +58,14 @@ def define_entities(db):
                 return
 
             commit() # Make sure filter_obj is in the db
-            self.exp.meas_graph.add_edge(self, filter_obj)
+            
             filter_obj.exp = self.exp
             with db_session:
                 FilterProxy[filter_obj.id].qubit_name = self.qubit_name
-            return filter_obj
+                commit()
+                fp = FilterProxy[filter_obj.id]
+            self.exp.meas_graph.add_edge(self, fp)
+            return fp
 
         def node_label(self):
             return f"{self.__class__.__name__} {self.label}\n({self.qubit_name})"
@@ -145,8 +151,10 @@ def define_entities(db):
         """docstring for FilterProxy"""
 
         def __init__(self, exp, qubit_name):
+            global __current_exp__
             super(QubitProxy, self).__init__(qubit_name=qubit_name)
             self.exp = exp
+            __current_exp__ = exp
             # self.qubit_name = qubit_name
             self.digitizer_settings = None
             self.available_streams = None
@@ -159,11 +167,16 @@ def define_entities(db):
                 return
 
             commit() # Make sure filter_obj is in the db
-            self.exp.meas_graph.add_edge(self, filter_obj)
-            filter_obj.exp = self.exp
+            
+            
             with db_session:
                 FilterProxy[filter_obj.id].qubit_name = self.qubit_name
-            return filter_obj
+                FilterProxy[filter_obj.id].exp = self.exp
+                commit()
+                fp = FilterProxy[filter_obj.id]
+            self.exp.meas_graph.add_edge(self, fp)
+
+            return fp
 
         def set_stream_type(self, stream_type):
             if stream_type not in ["raw", "demodulated", "integrated", "averaged"]:
@@ -174,7 +187,6 @@ def define_entities(db):
 
         def clear_pipeline(self):
             """Remove all nodes coresponding to the qubit"""
-            # import ipdb; ipdb.set_trace()
             # nodes_to_remove = [n for n in self.exp.meas_graph.nodes() if n.qubit_name == self.qubit_name]
             # self.exp.meas_graph.remove_nodes_from(nodes_to_remove)
             desc = nx.algorithms.dag.descendants(self.exp.meas_graph, self)
