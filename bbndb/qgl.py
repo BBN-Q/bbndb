@@ -48,8 +48,8 @@ def define_entities(db, cache_callback=None):
         label           = Required(str)
         model           = Required(str)
         address         = Optional(str)
-        power           = Optional(float)
-        frequency       = Optional(float)
+        power           = Required(float)
+        frequency       = Required(float)
         logical_channel = Optional("PhysicalChannel")
         channel_db      = Optional("ChannelDatabase")
         def __repr__(self):
@@ -124,7 +124,6 @@ def define_entities(db, cache_callback=None):
                 if attr in [a.name for a in self._attrs_]:
                     cache_callback()
             super(Channel, self).__setattr__(attr, value)
-
 
     class PhysicalChannel(Channel):
         '''
