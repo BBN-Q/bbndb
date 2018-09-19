@@ -12,7 +12,8 @@ Integrate        = None
 OutputProxy      = None
 Display          = None
 Write            = None
-QubiteProxy      = None
+Buffer           = None
+QubitProxy       = None
 stream_hierarchy = None
 
 __current_exp__ = None
@@ -147,6 +148,10 @@ def define_entities(db):
         add_date      = Required(bool, default = False)
         save_settings = Required(bool, default = True)
 
+    class Buffer(OutputProxy):
+        """Saves data in a buffer"""
+        max_size = Optional(int)
+
     class QubitProxy(NodeProxy):
         """docstring for FilterProxy"""
 
@@ -240,5 +245,6 @@ def define_entities(db):
     globals()["OutputProxy"] = OutputProxy
     globals()["Display"] = Display
     globals()["Write"] = Write
+    globals()["Buffer"] = Buffer
     globals()["QubitProxy"] = QubitProxy
     globals()["stream_hierarchy"] = [Demodulate, Integrate, Average, OutputProxy]
