@@ -199,15 +199,16 @@ def define_entities(db):
                 n.exp = None
             self.exp.meas_graph.remove_nodes_from(desc)
 
-        def auto_create_pipeline(self):
+        def auto_create_pipeline(self, buffers=False):
+            Output = Buffer if buffers else Write
             if self.stream_type.lower() == "raw":
-                self.add(Demodulate()).add(Integrate()).add(Average()).add(Write())
+                self.add(Demodulate()).add(Integrate()).add(Average()).add(Output())
             if self.stream_type.lower() == "demodulated":
-                self.add(Integrate()).add(Average()).add(Write())
+                self.add(Integrate()).add(Average()).add(Output())
             if self.stream_type.lower() == "integrated":
-                self.add(Average()).add(Write())
+                self.add(Average()).add(Output())
             if self.stream_type.lower() == "averaged":
-                self.add(Write())
+                self.add(Output())
 
         def show_pipeline(self):
             desc = list(nx.algorithms.dag.descendants(self.exp.meas_graph, self)) + [self]

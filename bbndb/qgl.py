@@ -61,7 +61,7 @@ def define_entities(db, cache_callback=None):
         label            = Required(str)
         model            = Required(str)
         address          = Optional(str)
-        stream_types     = Required(str, default="Raw")
+        stream_types     = Required(str, default="raw")
         channels         = Set("ReceiverChannel")
         trigger_source   = Required(str, default="External", py_check=lambda x: x in ['External', 'Internal'])
         channel_db       = Optional("ChannelDatabase")
