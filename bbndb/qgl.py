@@ -187,7 +187,7 @@ def define_entities(db, cache_callback=None):
         triggering_channel = Optional(LogicalChannel)
         channel            = Required(int)
         dsp_channel        = Optional(int)
-        stream_type        = Required(str, default="Raw", py_check=lambda x: x in["Raw", "Demodulated", "Integrated", "Averaged"])
+        stream_type        = Required(str, default="raw", py_check=lambda x: x in["raw", "demodulated", "integrated", "averaged"])
         if_freq            = Required(float, default=0.0)
         kernel             = Optional(str)
         kernel_bias        = Required(float, default=0.0)
