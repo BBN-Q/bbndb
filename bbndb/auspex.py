@@ -49,8 +49,8 @@ def define_entities(db):
 
         def __init__(self, **kwargs):
             global __current_exp__
-            with db_session:
-                super(FilterProxy, self).__init__(**kwargs)
+            # with db_session:
+            super(FilterProxy, self).__init__(**kwargs)
             self.exp = __current_exp__
 
         def add(self, filter_obj):
@@ -58,15 +58,16 @@ def define_entities(db):
                 print("This filter may have been orphaned by a clear_pipeline call!")
                 return
 
-            commit() # Make sure filter_obj is in the db
+            # commit() # Make sure filter_obj is in the db
             
             filter_obj.exp = self.exp
-            with db_session:
-                FilterProxy[filter_obj.id].qubit_name = self.qubit_name
-                commit()
-                fp = FilterProxy[filter_obj.id]
-            self.exp.meas_graph.add_edge(self, fp)
-            return fp
+            filter_obj.qubit_name = self.qubit_name
+            # with db_session:
+            #     FilterProxy[filter_obj.id].qubit_name = self.qubit_name
+            commit()
+            #     fp = FilterProxy[filter_obj.id]
+            self.exp.meas_graph.add_edge(self, filter_obj)
+            return filter_obj
 
         def node_label(self):
             return f"{self.__class__.__name__} {self.label}\n({self.qubit_name})"
@@ -171,17 +172,17 @@ def define_entities(db):
                 print("This qubit may have been orphaned!")
                 return
 
-            commit() # Make sure filter_obj is in the db
+            # commit() # Make sure filter_obj is in the db
             
             
-            with db_session:
-                FilterProxy[filter_obj.id].qubit_name = self.qubit_name
-                FilterProxy[filter_obj.id].exp = self.exp
-                commit()
-                fp = FilterProxy[filter_obj.id]
-            self.exp.meas_graph.add_edge(self, fp)
+            # with db_session:
+            # fp = FilterProxy[filter_obj.id]
+            filter_obj.qubit_name = self.qubit_name
+            filter_obj.exp = self.exp
+            commit()
+            self.exp.meas_graph.add_edge(self, filter_obj)
 
-            return fp
+            return filter_obj
 
         def set_stream_type(self, stream_type):
             if stream_type not in ["raw", "demodulated", "integrated", "averaged"]:
