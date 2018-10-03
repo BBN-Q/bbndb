@@ -5,30 +5,32 @@ from copy import deepcopy
 import datetime
 
 # Get these in global scope for module imports
-Channel = None
-PhysicalChannel = None
-LogicalChannel = None
+Channel                   = None
+PhysicalChannel           = None
+LogicalChannel            = None
 PhysicalQuadratureChannel = None
-PhysicalMarkerChannel = None
-LogicalMarkerChannel = None
-ReceiverChannel = None
-Measurement = None
-Qubit = None
-Edge = None
-MicrowaveSource = None
-ChannelDatabase = None
-Digitizer = None
-AWG = None
+PhysicalMarkerChannel     = None
+LogicalMarkerChannel      = None
+ReceiverChannel           = None
+Measurement               = None
+Qubit                     = None
+Edge                      = None
+MicrowaveSource           = None
+ChannelDatabase           = None
+Receiver                  = None
+Transmitter               = None
+Transceiver               = None
 
 def define_entities(db, cache_callback=None):
 
     class ChannelDatabase(db.Entity):
-        label      = Required(str)
-        channels   = Set("Channel", cascade_delete=True)
-        sources    = Set("MicrowaveSource", cascade_delete=True)
-        awgs       = Set("AWG", cascade_delete=True)
-        digitizers = Set("Digitizer", cascade_delete=True)
-        time       = Optional(datetime.datetime)
+        label        = Required(str)
+        channels     = Set("Channel", cascade_delete=True)
+        sources      = Set("MicrowaveSource", cascade_delete=True)
+        transmitters = Set("Transmitter", cascade_delete=True)
+        receivers    = Set("Receiver", cascade_delete=True)
+        transceivers = Set("Transceiver", cascade_delete=True)
+        time         = Optional(datetime.datetime)
         def __repr__(self):
             return str(self)
         def __str__(self):
@@ -57,7 +59,8 @@ def define_entities(db, cache_callback=None):
         def __str__(self):
             return f"{self.__class__.__name__}('{self.label}')"
 
-    class Digitizer(db.Entity):
+    class Receiver(db.Entity):
+        """A receiver , or generally an analog to digitial converter"""
         label            = Required(str)
         model            = Required(str)
         address          = Optional(str)
@@ -70,9 +73,10 @@ def define_entities(db, cache_callback=None):
         number_segments  = Required(int, default=1) # This should be automatic
         number_waveforms = Required(int, default=1) # This should be automatic
         number_averages  = Required(int, default=100) # This should be automatic
-        # acquire_mode     = Required(str,default="digitizer", py_check=lambda x: x in ['digitizer', 'averager'])
+        transceiver      = Optional("Transceiver")
+        # acquire_mode     = Required(str,default="receiver ", py_check=lambda x: x in ['receiver ', 'averager'])
 
-        @db_session
+        # @db_session
         def get_chan(self, name):
             return self.channels.select(lambda x: x.label.endswith(name)).first()
         def ch(self, name):
@@ -84,19 +88,21 @@ def define_entities(db, cache_callback=None):
         def __getitem__(self, value):
             return self.get_chan(value)
 
-    class AWG(db.Entity):
+    class Transmitter(db.Entity):
+        """An arbitrary waveform generator, or generally a digital to analog converter"""
         label            = Required(str)
         model            = Required(str)
         address          = Optional(str)
-        channels         = Set("PhysicalChannel", reverse="awg")
+        channels         = Set("PhysicalChannel", reverse="transmitter")
         trigger_interval = Required(float, default=100e-6)
         trigger_source   = Required(str, default="External", py_check=lambda x: x in ['External', 'Internal'])
         delay            = Required(float, default=0.0)
         master           = Required(bool, default=False)
         channel_db       = Optional("ChannelDatabase")
         sequence_file    = Optional(str)
+        transceiver      = Optional("Transceiver")
 
-        @db_session
+        # @db_session
         def get_chan(self, name):
             return self.channels.select(lambda x: x.label.endswith(name)).first()
         def ch(self, name):
@@ -107,6 +113,36 @@ def define_entities(db, cache_callback=None):
             return f"{self.__class__.__name__}('{self.label}')"
         def __getitem__(self, value):
             return self.get_chan(value)
+
+    class Processor(db.Entity):
+        """A hardware unit used for signal processing, e.g. a TDM"""
+        label       = Required(str)
+        model       = Required(str)
+        address     = Optional(str)
+        transceiver = Optional("Transceiver")
+
+    class Transceiver(db.Entity):
+        """A single machine or rack of a2ds and d2as that we want to treat as a unit."""
+        label        = Required(str)
+        model        = Required(str)
+        receivers    = Set("Receiver")
+        transmitters = Set("Transmitter")
+        processors   = Set("Processor")
+        master       = Optional(str)
+        channel_db   = Optional("ChannelDatabase")
+
+        def get_transmitter(self, name):
+            return self.transmitters.select(lambda x: x.label.endswith(name)).first()
+        def get_receiver(self, name):
+            return self.receivers.select(lambda x: x.label.endswith(name)).first()
+        # def ch(self, name):
+        #     return self.get_transmitter(name)
+        # def __repr__(self):
+        #     return str(self)
+        # def __str__(self):
+        #     return f"{self.__class__.__name__}('{self.label}')"
+        # def __getitem__(self, value):
+        #     return self.get_chan(value)
 
     class Channel(db.Entity):
         '''
@@ -127,9 +163,9 @@ def define_entities(db, cache_callback=None):
 
     class PhysicalChannel(Channel):
         '''
-        The main class for actual AWG channels.
+        The main class for actual Transmitter channels.
         '''
-        instrument      = Optional(str) # i.e. the AWG or receiver
+        instrument      = Optional(str) # i.e. the Transmitter or receiver
         translator      = Optional(str)
         generator       = Optional(MicrowaveSource, reverse="logical_channel")
         sampling_rate   = Required(float, default=1.2e9)
@@ -140,7 +176,7 @@ def define_entities(db, cache_callback=None):
         # quad_channel_I  = Optional("PhysicalQuadratureChannel", reverse="I_channel")
         # quad_channel_Q  = Optional("PhysicalQuadratureChannel", reverse="Q_channel")
         # marker_channel  = Optional("PhysicalMarkerChannel")
-        awg             = Optional(AWG)
+        transmitter     = Optional(Transmitter)
 
         def q(self):
             if isinstance(self.logical_channel, Qubit):
@@ -161,7 +197,7 @@ def define_entities(db, cache_callback=None):
 
     class PhysicalMarkerChannel(PhysicalChannel):
         '''
-        A digital output channel on an AWG.
+        A digital output channel on an Transmitter.
             gate_buffer: How much extra time should be added onto the beginning of a gating pulse
             gate_min_width: The minimum marker pulse width
         '''
@@ -189,11 +225,11 @@ def define_entities(db, cache_callback=None):
         dsp_channel        = Optional(int)
         stream_type        = Required(str, default="raw", py_check=lambda x: x in["raw", "demodulated", "integrated", "averaged"])
         if_freq            = Required(float, default=0.0)
-        kernel             = Optional(str)
+        kernel             = Optional(bytes) # Float64 byte representation of kernel
         kernel_bias        = Required(float, default=0.0)
         threshold          = Required(float, default=0.0)
         threshold_invert   = Required(bool, default=False)
-        digitizer          = Optional(Digitizer)
+        receiver           = Optional(Receiver)
 
     def pulse_check(name):
         return name in ["constant", "gaussian", "drag", "gaussOn", "gaussOff", "dragGaussOn", "dragGaussOff",
@@ -276,17 +312,18 @@ def define_entities(db, cache_callback=None):
                                             'riseFall': 20e-9}
             super(Edge, self).__init__(**kwargs)
 
-    globals()["Channel"] = Channel
-    globals()["PhysicalChannel"] = PhysicalChannel
-    globals()["LogicalChannel"] = LogicalChannel
+    globals()["Channel"]                   = Channel
+    globals()["PhysicalChannel"]           = PhysicalChannel
+    globals()["LogicalChannel"]            = LogicalChannel
     globals()["PhysicalQuadratureChannel"] = PhysicalQuadratureChannel
-    globals()["PhysicalMarkerChannel"] = PhysicalMarkerChannel
-    globals()["LogicalMarkerChannel"] = LogicalMarkerChannel
-    globals()["ReceiverChannel"] = ReceiverChannel
-    globals()["Measurement"] = Measurement
-    globals()["Qubit"] = Qubit
-    globals()["Edge"] = Edge
-    globals()["MicrowaveSource"] = MicrowaveSource
-    globals()["ChannelDatabase"] = ChannelDatabase
-    globals()["Digitizer"] = Digitizer
-    globals()["AWG"] = AWG
+    globals()["PhysicalMarkerChannel"]     = PhysicalMarkerChannel
+    globals()["LogicalMarkerChannel"]      = LogicalMarkerChannel
+    globals()["ReceiverChannel"]           = ReceiverChannel
+    globals()["Measurement"]               = Measurement
+    globals()["Qubit"]                     = Qubit
+    globals()["Edge"]                      = Edge
+    globals()["MicrowaveSource"]           = MicrowaveSource
+    globals()["ChannelDatabase"]           = ChannelDatabase
+    globals()["Receiver"]                  = Receiver
+    globals()["Transmitter"]               = Transmitter
+    globals()["Transceiver"]               = Transceiver
