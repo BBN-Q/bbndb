@@ -53,7 +53,7 @@ class Source(DatabaseItem, Base):
     power           = Column(Float, nullable=False)
     frequency       = Column(Float, nullable=False)
     # logicalchannel  = relationship("LogicalChannel", back_populates="generator")
-    # physicalchannel_id = Column(Integer, ForeignKey("physicalchannel.id"))
+    physicalchannel_id = Column(Integer, ForeignKey("physicalchannel.id"))
     # relationship("PhysicalChannel", back_populates="generator")
     
 class Receiver(DatabaseItem, Base):
@@ -173,7 +173,7 @@ class PhysicalChannel(ChannelMixin, Channel):
     instrument      = Column(String) # i.e. the Transmitter or receiver
     translator      = Column(String)
     generator_id    = Column(Integer, ForeignKey("source.id"))
-    # generator       = relationship(Source, back_populates="physicalchannel")
+    generator       = relationship(Source, back_populates="physicalchannel")
     sampling_rate   = Column(Float, default=1.2e9, nullable=False)
     delay           = Column(Float, default=0.0, nullable=False)
 
