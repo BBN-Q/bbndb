@@ -172,8 +172,8 @@ class PhysicalChannel(ChannelMixin, Channel):
     delay           = Column(Float, default=0.0, nullable=False)
 
 #     # Column reverse connection, nullable=Falses
-#     logical_channel_id = Column(Integer, ForeignKey("logicalchannel.id"))
-    # logical_channel = relationship("LogicalChannel", backref="physicalchannel")
+    logicalchannel_id = Column(Integer, ForeignKey("logicalchannel.id"))
+    logicalchannel    = relationship("LogicalChannel", backref="physicalchannel")
     # transmitter_id  = Column(Integer, ForeignKey("transmitter.id"))
     # transmitter     = relationship("Transmitter", back_populates="channels")
 
