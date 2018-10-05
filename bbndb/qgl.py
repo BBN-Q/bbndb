@@ -60,7 +60,7 @@ class Receiver(DatabaseItem, Base):
     model            = Column(String, nullable=False)
     address          = Column(String)
     stream_types     = Column(String, default="raw", nullable=False)
-#     channels         = relationship("ReceiverChannel")
+    channels         = relationship("ReceiverChannel", back_populates="receiver", cascade="all, delete, delete-orphan")
     trigger_source   = Column(String, default="External", nullable=False)
     record_length    = Column(Integer, default=1024, nullable=False)
     sampling_rate    = Column(Float, default=1e9, nullable=False)
@@ -86,7 +86,7 @@ class Transmitter(DatabaseItem, Base):
     """An arbitrary waveform generator, or generally a digital to analog converter"""
     model            = Column(String, nullable=False)
     address          = Column(String)
-    channels         = relationship("PhysicalChannel", back_populates="transmitter")
+    channels         = relationship("PhysicalChannel", back_populates="transmitter", cascade="all, delete, delete-orphan")
     trigger_interval = Column(Float, default=100e-6, nullable=False)
     trigger_source   = Column(String, default="External", nullable=False)
     delay            = Column(Float, default=0.0, nullable=False)
@@ -207,41 +207,46 @@ class LogicalChannel(ChannelMixin, Channel):
     # receiver_chan      = relationship("ReceiverChannel", back_populates="triggering_chan")
 
 
-class PhysicalMarkerChannel(ChannelMixin, PhysicalChannel):
+class PhysicalMarkerChannel(PhysicalChannel, ChannelMixin):
     '''
     A digital output channel on an Transmitter.
         gate_buffer: How much extra time should be added onto the beginning of a gating pulse
         gate_min_width: The minimum marker pulse width
     '''
+    id             = Column(Integer, ForeignKey("physicalchannel.id"), primary_key=True)
     gate_buffer    = Column(Float, default=0.0, nullable=False)
     gate_min_width = Column(Float, default=0.0, nullable=False)
     # phys_channel   = relationship("PhysicalChannel")
 
-# class PhysicalQuadratureChannel(PhysicalChannel):
-#     '''
-#     Something used to implement a standard qubit channel with two analog channels and a microwave gating channel.
-#     '''
-#     amp_factor           = Column(Float, default=1.0, nullable=False)
-#     phase_skew           = Column(Float, default=0.0, nullable=False)
-#     I_channel_offset     = Column(Float, default=0.0, nullable=False)
-#     Q_channel_offset     = Column(Float, default=0.0, nullable=False)
-#     I_channel_amp_factor = Column(Float, default=1.0, nullable=False)
-#     Q_channel_amp_factor = Column(Float, default=1.0, nullable=False)
+class PhysicalQuadratureChannel(PhysicalChannel):
+    '''
+    Something used to implement a standard qubit channel with two analog channels and a microwave gating channel.
+    '''
+    id                   = Column(Integer, ForeignKey("physicalchannel.id"), primary_key=True)
+    amp_factor           = Column(Float, default=1.0, nullable=False)
+    phase_skew           = Column(Float, default=0.0, nullable=False)
+    I_channel_offset     = Column(Float, default=0.0, nullable=False)
+    Q_channel_offset     = Column(Float, default=0.0, nullable=False)
+    I_channel_amp_factor = Column(Float, default=1.0, nullable=False)
+    Q_channel_amp_factor = Column(Float, default=1.0, nullable=False)
 
-# class ReceiverChannel(PhysicalChannel):
-#     '''
-#     A trigger input on a receiver.
-#     '''
-#     triggering_channel = Column(LogicalChannel)
-#     channel            = Column(Integer, nullable=False)
-#     dsp_channel        = Column(Integer)
-#     stream_type        = Column(String, default="raw", nullable=False) #, py_check=lambda x: x in["raw", "demodulated", "integrated", "averaged"],
-#     if_freq            = Column(Float, default=0.0, nullable=False)
-#     kernel             = Column(LargeBinary) # Float64 byte representation of kernel
-#     kernel_bias        = Column(Float, default=0.0, nullable=False)
-#     threshold          = Column(Float, default=0.0, nullable=False)
-#     threshold_invert   = Column(Boolean, default=False, nullable=False)
-#     receiver           = Column(Receiver)
+class ReceiverChannel(PhysicalChannel):
+    '''
+    A trigger input on a receiver.
+    '''
+    # triggering_channel = Column(LogicalChannel)
+    id               = Column(Integer, ForeignKey("physicalchannel.id"), primary_key=True)
+    channel          = Column(Integer, nullable=False)
+    dsp_channel      = Column(Integer)
+    stream_type      = Column(String, default="raw", nullable=False) #, py_check=lambda x: x in["raw", "demodulated", "integrated", "averaged"],
+    if_freq          = Column(Float, default=0.0, nullable=False)
+    kernel           = Column(LargeBinary) # Float64 byte representation of kernel
+    kernel_bias      = Column(Float, default=0.0, nullable=False)
+    threshold        = Column(Float, default=0.0, nullable=False)
+    threshold_invert = Column(Boolean, default=False, nullable=False)
+    # receiver       = Column(Receiver)
+    receiver_id      = Column(Integer, ForeignKey("receiver.id"))
+    receiver         = relationship("Receiver", back_populates="channels")
 
 # # def pulse_check(name):
 # #     return name in ["constant", "gaussian", "drag", "gaussOn", "gaussOff", "dragGaussOn", "dragGaussOff",
