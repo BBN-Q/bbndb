@@ -48,13 +48,13 @@ class Instrument(DatabaseItem, Base):
     parameters = Column(PickleType, default={}, nullable=False)
     
 class Source(DatabaseItem, Base):
-    model                = Column(String, nullable=False)
-    address              = Column(String)
-    power                = Column(Float, nullable=False)
-    frequency            = Column(Float, nullable=False)
-    # logical_channel_id = Column(Integer, ForeignKey("physicalchannel.id"))
-    # physicalchannel_id   = Column(Integer, ForeignKey("physicalchannel.id"))
-    # physicalchannel      = relationship("PhysicalChannel", back_populates="generator")
+    model           = Column(String, nullable=False)
+    address         = Column(String)
+    power           = Column(Float, nullable=False)
+    frequency       = Column(Float, nullable=False)
+    # logicalchannel  = relationship("LogicalChannel", back_populates="generator")
+    # physicalchannel_id = Column(Integer, ForeignKey("physicalchannel.id"))
+    # relationship("PhysicalChannel", back_populates="generator")
     
 class Receiver(DatabaseItem, Base):
     """A receiver , or generally an analog to digitial converter"""
@@ -126,19 +126,6 @@ class Transceiver(DatabaseItem, Base):
     # def get_receiver(self, name):
     #     return self.receivers.select(lambda x: x.label.endswith(name)).first()
 
-class ChannelMixin(object):
-    # Omit the __tablename__ so that all channels occupy the same table
-    # @declared_attr
-    # def channel_db_id(cls):
-    #     return Column(Integer, ForeignKey('channeldatabase.id'))
-    def __repr__(self):
-        return str(self)
-    def __str__(self):
-        return f"{self.__class__.__name__}('{self.label}')"
-    @declared_attr
-    def __mapper_args__(cls):
-        return {'polymorphic_identity': cls.__name__.lower()}
-
 class Channel(Base):
     '''
     Every channel has a label and some printers.
@@ -159,6 +146,25 @@ class Channel(Base):
     #             cache_callback()
     #     super(Channel, self).__setattr__(attr, value)
 
+class ChannelMixin(object):
+    # Omit the __tablename__ so that all channels occupy the same table
+    # @declared_attr
+    # def channel_db_id(cls):
+    #     return Column(Integer, ForeignKey('channeldatabase.id'))
+    @declared_attr
+    def id(cls):
+        return Column(Integer, ForeignKey("channel.id"), primary_key=True)
+    @declared_attr
+    def __mapper_args__(cls):
+        return {'polymorphic_identity': cls.__name__.lower()}
+    @declared_attr
+    def __tablename__(cls):
+        return cls.__name__.lower()
+
+    def __repr__(self):
+        return str(self)
+    def __str__(self):
+        return f"{self.__class__.__name__}('{self.label}')"
 
 class PhysicalChannel(ChannelMixin, Channel):
     '''
@@ -166,35 +172,36 @@ class PhysicalChannel(ChannelMixin, Channel):
     '''
     instrument      = Column(String) # i.e. the Transmitter or receiver
     translator      = Column(String)
-    # generator_id    = Column(Integer, ForeignKey("source.id"))
+    generator_id    = Column(Integer, ForeignKey("source.id"))
     # generator       = relationship(Source, back_populates="physicalchannel")
     sampling_rate   = Column(Float, default=1.2e9, nullable=False)
     delay           = Column(Float, default=0.0, nullable=False)
 
-#     # Column reverse connection, nullable=Falses
-    logicalchannel_id = Column(Integer, ForeignKey("logicalchannel.id"))
-    logicalchannel    = relationship("LogicalChannel", backref="physicalchannel")
-    # transmitter_id  = Column(Integer, ForeignKey("transmitter.id"))
-    # transmitter     = relationship("Transmitter", back_populates="channels")
+# #     # Column reverse connection, nullable=Falses
+#     # logicalchannel_id = Column(Integer, ForeignKey("channel.id"))
+#     # logicalchannel    = relationship("LogicalChannel", backref=backref('physicalchannel', remote_side=[Channel.id]))
+#     # transmitter_id  = Column(Integer, ForeignKey("transmitter.id"))
+#     # transmitter     = relationship("Transmitter", back_populates="channels")
 
-    # def q(self):
-        # if isinstance(self.logical_channel, Qubit):
-            # return self.logical_channel
+#     # def q(self):
+#         # if isinstance(self.logical_channel, Qubit):
+#             # return self.logical_channel
 
-class LogicalChannel(ChannelMixin, Channel):
-    '''
-    The main class from which we will generate sequences.
-    At some point it needs to be assigned to a physical channel.
-        frequency: modulation frequency of the channel (can be positive or negative)
-    '''
-    #During initilization we may just have a string reference to the channel
-    # physicalchannel_id = Column(Integer, ForeignKey("physicalchannel.id"))
-    frequency          = Column(Float, default=0.0, nullable=False)
-    pulse_params       = Column(PickleType, default={})
-    # gate_chan_id       = Column(Integer, ForeignKey("logicalmarkerchannel.id"))
-    # gate_chan          = relationship("LogicalMarkerChannel", backref="meas_channel")
-    # receiver_chan_id   = Column(Integer, ForeignKey("receiverchannel.id"))
-    # receiver_chan      = relationship("ReceiverChannel", back_populates="triggering_chan")
+# class LogicalChannel(ChannelMixin, Channel):
+#     '''
+#     The main class from which we will generate sequences.
+#     At some point it needs to be assigned to a physical channel.
+#         frequency: modulation frequency of the channel (can be positive or negative)
+#     '''
+#     #During initilization we may just have a string reference to the channel
+#     # physicalchannel_id = Column(Integer, ForeignKey("channel.id"))
+#     frequency          = Column(Float, default=0.0, nullable=False)
+#     pulse_params       = Column(PickleType, default={})
+#     # gate_chan_id       = Column(Integer, ForeignKey("logicalmarkerchannel.id"))
+#     # gate_chan          = relationship("LogicalMarkerChannel", backref="meas_channel")
+#     # receiver_chan_id   = Column(Integer, ForeignKey("receiverchannel.id"))
+#     # receiver_chan      = relationship("ReceiverChannel", back_populates="triggering_chan")
+
 
 # class PhysicalMarkerChannel(PhysicalChannel):
 #     '''
