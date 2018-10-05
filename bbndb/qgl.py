@@ -207,15 +207,15 @@ class LogicalChannel(ChannelMixin, Channel):
     # receiver_chan      = relationship("ReceiverChannel", back_populates="triggering_chan")
 
 
-# class PhysicalMarkerChannel(PhysicalChannel):
-#     '''
-#     A digital output channel on an Transmitter.
-#         gate_buffer: How much extra time should be added onto the beginning of a gating pulse
-#         gate_min_width: The minimum marker pulse width
-#     '''
-#     gate_buffer    = Column(Float, default=0.0, nullable=False)
-#     gate_min_width = Column(Float, default=0.0, nullable=False)
-#     # phys_channel   = relationship("PhysicalChannel")
+class PhysicalMarkerChannel(ChannelMixin, PhysicalChannel):
+    '''
+    A digital output channel on an Transmitter.
+        gate_buffer: How much extra time should be added onto the beginning of a gating pulse
+        gate_min_width: The minimum marker pulse width
+    '''
+    gate_buffer    = Column(Float, default=0.0, nullable=False)
+    gate_min_width = Column(Float, default=0.0, nullable=False)
+    # phys_channel   = relationship("PhysicalChannel")
 
 # class PhysicalQuadratureChannel(PhysicalChannel):
 #     '''
