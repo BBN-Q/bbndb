@@ -30,7 +30,7 @@ class ChannelDatabase(Base):
     id           = Column(Integer, primary_key=True)
     label        = Column(String, nullable=False)
     channels     = relationship("Channel", backref="channel_db", cascade="all, delete, delete-orphan")
-    sources      = relationship("Source", backref="channel_db", cascade="all, delete, delete-orphan")
+    sources      = relationship("Generator", backref="channel_db", cascade="all, delete, delete-orphan")
     transmitters = relationship("Transmitter", backref="channel_db", cascade="all, delete, delete-orphan")
     receivers    = relationship("Receiver", backref="channel_db", cascade="all, delete, delete-orphan")
     transceivers = relationship("Transceiver", backref="channel_db", cascade="all, delete, delete-orphan")
@@ -47,14 +47,13 @@ class Instrument(DatabaseItem, Base):
     address    = Column(String)
     parameters = Column(PickleType, default={}, nullable=False)
     
-class Source(DatabaseItem, Base):
-    model           = Column(String, nullable=False)
-    address         = Column(String)
-    power           = Column(Float, nullable=False)
-    frequency       = Column(Float, nullable=False)
+class Generator(DatabaseItem, Base):
+    model            = Column(String, nullable=False)
+    address          = Column(String)
+    power            = Column(Float, nullable=False)
+    frequency        = Column(Float, nullable=False)
     # logicalchannel  = relationship("LogicalChannel", back_populates="generator")
-    physicalchannel_id = Column(Integer, ForeignKey("physicalchannel.id"))
-    # relationship("PhysicalChannel", back_populates="generator")
+    physicalchannels = relationship("PhysicalChannel", back_populates="generator")
     
 class Receiver(DatabaseItem, Base):
     """A receiver , or generally an analog to digitial converter"""
@@ -172,8 +171,10 @@ class PhysicalChannel(ChannelMixin, Channel):
     '''
     instrument      = Column(String) # i.e. the Transmitter or receiver
     translator      = Column(String)
-    generator_id    = Column(Integer, ForeignKey("source.id"))
-    generator       = relationship(Source, back_populates="physicalchannel")
+
+    generator_id    = Column(Integer, ForeignKey("generator.id"))
+    generator       = relationship("Generator", back_populates="physicalchannels")
+
     sampling_rate   = Column(Float, default=1.2e9, nullable=False)
     delay           = Column(Float, default=0.0, nullable=False)
 
@@ -334,7 +335,7 @@ if __name__ == '__main__':
     session = Session()
 
     b = ChannelDatabase(label="working2")
-    s = Source(label="Src1", model="abc", power=10.0, frequency=5.0e9)
+    s = Generator(label="Src1", model="abc", power=10.0, frequency=5.0e9)
     b.sources.append(s)
     session.add_all([b,s])
     session.new
