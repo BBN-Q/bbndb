@@ -86,7 +86,7 @@ class Transmitter(DatabaseItem, Base):
     """An arbitrary waveform generator, or generally a digital to analog converter"""
     model            = Column(String, nullable=False)
     address          = Column(String)
-    # channels         = relationship("PhysicalChannel", back_populates="transmitter")
+    channels         = relationship("PhysicalChannel", back_populates="transmitter")
     trigger_interval = Column(Float, default=100e-6, nullable=False)
     trigger_source   = Column(String, default="External", nullable=False)
     delay            = Column(Float, default=0.0, nullable=False)
@@ -178,30 +178,33 @@ class PhysicalChannel(ChannelMixin, Channel):
     sampling_rate   = Column(Float, default=1.2e9, nullable=False)
     delay           = Column(Float, default=0.0, nullable=False)
 
-# #     # Column reverse connection, nullable=Falses
-#     # logicalchannel_id = Column(Integer, ForeignKey("channel.id"))
-#     # logicalchannel    = relationship("LogicalChannel", backref=backref('physicalchannel', remote_side=[Channel.id]))
-#     # transmitter_id  = Column(Integer, ForeignKey("transmitter.id"))
-#     # transmitter     = relationship("Transmitter", back_populates="channels")
+    logicalchannel_id = Column(Integer, ForeignKey("logicalchannel.id"))
+    
+    transmitter_id  = Column(Integer, ForeignKey("transmitter.id"))
+    transmitter     = relationship("Transmitter", back_populates="channels")
 
 #     # def q(self):
 #         # if isinstance(self.logical_channel, Qubit):
 #             # return self.logical_channel
 
-# class LogicalChannel(ChannelMixin, Channel):
-#     '''
-#     The main class from which we will generate sequences.
-#     At some point it needs to be assigned to a physical channel.
-#         frequency: modulation frequency of the channel (can be positive or negative)
-#     '''
-#     #During initilization we may just have a string reference to the channel
-#     # physicalchannel_id = Column(Integer, ForeignKey("channel.id"))
-#     frequency          = Column(Float, default=0.0, nullable=False)
-#     pulse_params       = Column(PickleType, default={})
-#     # gate_chan_id       = Column(Integer, ForeignKey("logicalmarkerchannel.id"))
-#     # gate_chan          = relationship("LogicalMarkerChannel", backref="meas_channel")
-#     # receiver_chan_id   = Column(Integer, ForeignKey("receiverchannel.id"))
-#     # receiver_chan      = relationship("ReceiverChannel", back_populates="triggering_chan")
+class LogicalChannel(ChannelMixin, Channel):
+    '''
+    The main class from which we will generate sequences.
+    At some point it needs to be assigned to a physical channel.
+        frequency: modulation frequency of the channel (can be positive or negative)
+    '''
+    #During initilization we may just have a string reference to the channel
+
+    frequency          = Column(Float, default=0.0, nullable=False)
+    pulse_params       = Column(PickleType, default={})
+
+    physicalchannel = relationship("PhysicalChannel", uselist=False, backref="logicalchannel", 
+                                   foreign_keys="[PhysicalChannel.logicalchannel_id]")
+
+    # gate_chan_id       = Column(Integer, ForeignKey("logicalmarkerchannel.id"))
+    # gate_chan          = relationship("LogicalMarkerChannel", backref="meas_channel")
+    # receiver_chan_id   = Column(Integer, ForeignKey("receiverchannel.id"))
+    # receiver_chan      = relationship("ReceiverChannel", back_populates="triggering_chan")
 
 
 # class PhysicalMarkerChannel(PhysicalChannel):
