@@ -2,9 +2,4 @@
 # from .qgl import define_entities as qgl_ent
 from . import qgl
 from . import auspex
-
-database = None
-
-def define_entities(db, cache_callback=None):
-	auspex.define_entities(db)
-	qgl.define_entities(db, cache_callback=cache_callback)
+from session import Session, database, Base

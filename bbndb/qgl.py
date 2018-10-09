@@ -28,9 +28,9 @@ import datetime
 
 from sqlalchemy import Column, DateTime, String, Boolean, Float, Integer, LargeBinary, ForeignKey, func, JSON, PickleType
 from sqlalchemy.orm import relationship, backref, validates
-from sqlalchemy.ext.declarative import declarative_base, declared_attr
+from sqlalchemy.ext.declarative import declared_attr
 
-Base = declarative_base()
+from session import Base, Session, engine
 
 class DatabaseItem(object):
     @declared_attr
@@ -231,12 +231,6 @@ class LogicalChannel(ChannelMixin, Channel):
     physicalchannel = relationship("PhysicalChannel", uselist=False, backref="logicalchannel", 
                                    foreign_keys="[PhysicalChannel.logicalchannel_id]")
 
-    # gate_chan_id       = Column(Integer, ForeignKey("logicalmarkerchannel.id"))
-    # gate_chan          = relationship("LogicalMarkerChannel", backref="meas_channel")
-    # receiver_chan_id   = Column(Integer, ForeignKey("receiverchannel.id"))
-    # receiver_chan      = relationship("ReceiverChannel", back_populates="triggering_chan")
-
-
 class PhysicalMarkerChannel(PhysicalChannel, ChannelMixin):
     '''
     A digital output channel on an Transmitter.
@@ -299,10 +293,10 @@ class LogicalMarkerChannel(LogicalChannel, ChannelMixin):
     meas_chan_id = Column(Integer, ForeignKey("measurement.id"))
     meas_gate_id = Column(Integer, ForeignKey("measurement.id"))
 
-    # def __init__(self, **kwargs):
-    #     if "pulse_params" not in kwargs.keys():
-    #         kwargs["pulse_params"] =  {'shape_fun': "constant",'length': 10e-9}
-    #     super(LogicalMarkerChannel, self).__init__(**kwargs)
+    def __init__(self, **kwargs):
+        if "pulse_params" not in kwargs.keys():
+            kwargs["pulse_params"] =  {'shape_fun': "constant",'length': 10e-9}
+        super(LogicalMarkerChannel, self).__init__(**kwargs)
 
 class Qubit(LogicalChannel, ChannelMixin):
     '''
@@ -314,16 +308,16 @@ class Qubit(LogicalChannel, ChannelMixin):
     edge_source_id = Column(Integer, ForeignKey("edge.id"))
     edge_target_id = Column(Integer, ForeignKey("edge.id"))
 
-    # def __init__(self, **kwargs):
-    #     if "pulse_params" not in kwargs.keys():
-    #         kwargs["pulse_params"] =  {'length': 20e-9,
-    #                         'piAmp': 1.0,
-    #                         'pi2Amp': 0.5,
-    #                         'shape_fun': "gaussian",
-    #                         'cutoff': 2,
-    #                         'drag_scaling': 0,
-    #                         'sigma': 5e-9}
-    #     super(Qubit, self).__init__(**kwargs)
+    def __init__(self, **kwargs):
+        if "pulse_params" not in kwargs.keys():
+            kwargs["pulse_params"] =  {'length': 20e-9,
+                            'piAmp': 1.0,
+                            'pi2Amp': 0.5,
+                            'shape_fun': "gaussian",
+                            'cutoff': 2,
+                            'drag_scaling': 0,
+                            'sigma': 5e-9}
+        super(Qubit, self).__init__(**kwargs)
 
 class Measurement(LogicalChannel, ChannelMixin):
     '''
@@ -348,14 +342,14 @@ class Measurement(LogicalChannel, ChannelMixin):
         assert source in ['autodyne', 'homodyne']
         return source
     
-    # def __init__(self, **kwargs):
-    #     if "pulse_params" not in kwargs.keys():
-    #         kwargs["pulse_params"] =  {'length': 100e-9,
-    #                             'amp': 1.0,
-    #                             'shape_fun': "tanh",
-    #                             'cutoff': 2,
-    #                             'sigma': 1e-9}
-    #     super(Measurement, self).__init__(**kwargs)
+    def __init__(self, **kwargs):
+        if "pulse_params" not in kwargs.keys():
+            kwargs["pulse_params"] =  {'length': 100e-9,
+                                'amp': 1.0,
+                                'shape_fun': "tanh",
+                                'cutoff': 2,
+                                'sigma': 1e-9}
+        super(Measurement, self).__init__(**kwargs)
 
 class Edge(LogicalChannel, ChannelMixin):
     '''
@@ -370,17 +364,17 @@ class Edge(LogicalChannel, ChannelMixin):
     source = relationship("Qubit", uselist=False, backref="edge_source", foreign_keys="[Qubit.edge_source_id]")
     target = relationship("Qubit", uselist=False, backref="edge_target", foreign_keys="[Qubit.edge_target_id]")
 
-    # def __init__(self, **kwargs):
-    #     if "pulse_params" not in kwargs.keys():
-    #         kwargs["pulse_params"] =   {'length': 20e-9,
-    #                                     'amp': 1.0,
-    #                                     'phase': 0.0,
-    #                                     'shape_fun': "gaussian",
-    #                                     'cutoff': 2,
-    #                                     'drag_scaling': 0,
-    #                                     'sigma': 5e-9,
-    #                                     'riseFall': 20e-9}
-    #     super(Edge, self).__init__(**kwargs)
+    def __init__(self, **kwargs):
+        if "pulse_params" not in kwargs.keys():
+            kwargs["pulse_params"] =   {'length': 20e-9,
+                                        'amp': 1.0,
+                                        'phase': 0.0,
+                                        'shape_fun': "gaussian",
+                                        'cutoff': 2,
+                                        'drag_scaling': 0,
+                                        'sigma': 5e-9,
+                                        'riseFall': 20e-9}
+        super(Edge, self).__init__(**kwargs)
 
 if __name__ == '__main__':
     
@@ -388,9 +382,15 @@ if __name__ == '__main__':
     engine = create_engine('sqlite:///:memory:', echo=True)
     Base.metadata.create_all(engine)
 
-    from sqlalchemy.orm import sessionmaker
-    Session = sessionmaker(bind=engine)
+    # from sqlalchemy.orm import sessionmaker
+    # Session = sessionmaker(bind=engine)
+    Session.configure(bind=engine)
     session = Session()
+
+    q1 = Qubit(label="q1")
+    q2 = Qubit(label="q2")
+    e1 = Edge(label="e1", source=q1, target=q2)
+    session.add_all([q1,q2,e1])
 
     b = ChannelDatabase(label="working2")
     s = Generator(label="Src1", model="abc", power=10.0, frequency=5.0e9)
