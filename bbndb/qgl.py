@@ -61,20 +61,24 @@ class Receiver(DatabaseItem, Base):
     address          = Column(String)
     stream_types     = Column(String, default="raw", nullable=False)
     channels         = relationship("ReceiverChannel", back_populates="receiver", cascade="all, delete, delete-orphan")
-    trigger_source   = Column(String, default="External", nullable=False)
+    trigger_source   = Column(String, default="external", nullable=False)
     record_length    = Column(Integer, default=1024, nullable=False)
     sampling_rate    = Column(Float, default=1e9, nullable=False)
     number_segments  = Column(Integer, default=1) # This should be automati, nullable=Falsec
     number_waveforms = Column(Integer, default=1) # This should be automati, nullable=Falsec
     number_averages  = Column(Integer, default=100) # This should be automati, nullable=Falsec
     transceiver_id   = Column(Integer, ForeignKey("transceiver.id"))
-    # acquire_mode     = Column(String,default="receiver ", py_check=lambda x: x in ['receiver ', 'averager'], nullable=False)
+    acquire_mode     = Column(String, default="digitizer", nullable=False)
 
-    @validates('trigger_source')
-    def validate_trigger_source(self, key, source):
-        assert source in ['External', 'Internal']
+    @validates('acquire_mode')
+    def validate_acquire_mode(self, key, source):
+        assert source in ['digitizer ', 'averager']
         return source
     
+    @validates('trigger_source')
+    def validate_trigger_source(self, key, source):
+        assert source in ['external', 'internal']
+        return source
     # def get_chan(self, name):
     #     return self.channels.select(lambda x: x.label.endswith(name)).first()
     # def ch(self, name):
@@ -88,7 +92,7 @@ class Transmitter(DatabaseItem, Base):
     address          = Column(String)
     channels         = relationship("PhysicalChannel", back_populates="transmitter", cascade="all, delete, delete-orphan")
     trigger_interval = Column(Float, default=100e-6, nullable=False)
-    trigger_source   = Column(String, default="External", nullable=False)
+    trigger_source   = Column(String, default="external", nullable=False)
     delay            = Column(Float, default=0.0, nullable=False)
     master           = Column(Boolean, default=False, nullable=False)
     sequence_file    = Column(String)
@@ -96,7 +100,7 @@ class Transmitter(DatabaseItem, Base):
 
     @validates('trigger_source')
     def validate_trigger_source(self, key, source):
-        assert source in ['External', 'Internal']
+        assert source in ['external', 'internal']
         return source
     
     # def get_chan(self, name):
@@ -218,11 +222,12 @@ class PhysicalMarkerChannel(PhysicalChannel, ChannelMixin):
     gate_min_width = Column(Float, default=0.0, nullable=False)
     # phys_channel   = relationship("PhysicalChannel")
 
-class PhysicalQuadratureChannel(PhysicalChannel):
+class PhysicalQuadratureChannel(PhysicalChannel, ChannelMixin):
     '''
     Something used to implement a standard qubit channel with two analog channels and a microwave gating channel.
     '''
-    id                   = Column(Integer, ForeignKey("physicalchannel.id"), primary_key=True)
+    id = Column(Integer, ForeignKey("physicalchannel.id"), primary_key=True)
+
     amp_factor           = Column(Float, default=1.0, nullable=False)
     phase_skew           = Column(Float, default=0.0, nullable=False)
     I_channel_offset     = Column(Float, default=0.0, nullable=False)
@@ -230,12 +235,13 @@ class PhysicalQuadratureChannel(PhysicalChannel):
     I_channel_amp_factor = Column(Float, default=1.0, nullable=False)
     Q_channel_amp_factor = Column(Float, default=1.0, nullable=False)
 
-class ReceiverChannel(PhysicalChannel):
+class ReceiverChannel(PhysicalChannel, ChannelMixin):
     '''
     A trigger input on a receiver.
     '''
     # triggering_channel = Column(LogicalChannel)
-    id               = Column(Integer, ForeignKey("physicalchannel.id"), primary_key=True)
+    id = Column(Integer, ForeignKey("physicalchannel.id"), primary_key=True)
+
     channel          = Column(Integer, nullable=False)
     dsp_channel      = Column(Integer)
     stream_type      = Column(String, default="raw", nullable=False) #, py_check=lambda x: x in["raw", "demodulated", "integrated", "averaged"],
@@ -244,7 +250,7 @@ class ReceiverChannel(PhysicalChannel):
     kernel_bias      = Column(Float, default=0.0, nullable=False)
     threshold        = Column(Float, default=0.0, nullable=False)
     threshold_invert = Column(Boolean, default=False, nullable=False)
-    # receiver       = Column(Receiver)
+
     receiver_id      = Column(Integer, ForeignKey("receiver.id"))
     receiver         = relationship("Receiver", back_populates="channels")
 
@@ -252,85 +258,97 @@ class ReceiverChannel(PhysicalChannel):
 # #     return name in ["constant", "gaussian", "drag", "gaussOn", "gaussOff", "dragGaussOn", "dragGaussOff",
 # #                    "tanh", "exp_decay", "autodyne", "arb_axis_drag"]
 
-# class LogicalMarkerChannel(LogicalChannel):
-#     '''
-#     A class for digital channels for gating sources or triggering other things.
-#     '''
-#     meas_channel    = Column(LogicalChannel)
-#     trig_channel_id = Column(Integer, ForeignKey("measurement.id"))
-#     trig_channel    = relationship("Measurement", back_populates="marker_chan")
+class LogicalMarkerChannel(LogicalChannel, ChannelMixin):
+    '''
+    A class for digital channels for gating sources or triggering other things.
+    '''
+    id = Column(Integer, ForeignKey("logicalchannel.id"), primary_key=True)
+    # meas_channel    = Column(LogicalChannel)
+    # trig_channel_id = Column(Integer, ForeignKey("measurement.id"))
+    # trig_channel    = relationship("Measurement", back_populates="marker_chan")
 
-#     # def __init__(self, **kwargs):
-#     #     if "pulse_params" not in kwargs.keys():
-#     #         kwargs["pulse_params"] =  {'shape_fun': "constant",'length': 10e-9}
-#     #     super(LogicalMarkerChannel, self).__init__(**kwargs)
+    # def __init__(self, **kwargs):
+    #     if "pulse_params" not in kwargs.keys():
+    #         kwargs["pulse_params"] =  {'shape_fun': "constant",'length': 10e-9}
+    #     super(LogicalMarkerChannel, self).__init__(**kwargs)
 
-# class Qubit(LogicalChannel):
-#     '''
-#     The main class for generating qubit pulses.  Effectively a logical "QuadratureChannel".
-#         frequency: modulation frequency of the channel (can be positive or negative)
-#     '''
-#     edge_source_id = Column(Integer, ForeignKey("edge.id"))
-#     edge_source    = relationship("Edge", back_populates="source")
-#     edge_target_id = Column(Integer, ForeignKey("edge.id"))
-#     edge_target    = relationship("Edge", back_populates="target")
+class Qubit(LogicalChannel, ChannelMixin):
+    '''
+    The main class for generating qubit pulses.  Effectively a logical "QuadratureChannel".
+        frequency: modulation frequency of the channel (can be positive or negative)
+    '''
+    id = Column(Integer, ForeignKey("logicalchannel.id"), primary_key=True)
 
-#     # def __init__(self, **kwargs):
-#     #     if "pulse_params" not in kwargs.keys():
-#     #         kwargs["pulse_params"] =  {'length': 20e-9,
-#     #                         'piAmp': 1.0,
-#     #                         'pi2Amp': 0.5,
-#     #                         'shape_fun': "gaussian",
-#     #                         'cutoff': 2,
-#     #                         'drag_scaling': 0,
-#     #                         'sigma': 5e-9}
-#     #     super(Qubit, self).__init__(**kwargs)
+    # edge_source_id = Column(Integer, ForeignKey("edge.id"))
+    # edge_source    = relationship("Edge", back_populates="source")
+    
+    # edge_target_id = Column(Integer, ForeignKey("edge.id"))
+    # edge_target    = relationship("Edge", back_populates="target")
 
-# class Measurement(LogicalChannel):
-#     '''
-#     A class for measurement channels.
-#     Measurements are special because they can be different types:
-#     autodyne which needs an IQ pair or hetero/homodyne which needs just a marker channel.
-#         meas_type: Type of measurement (autodyne, homodyne)
-#         autodyne_freq: use to bake the modulation into the pulse, so that it has constant phase
-#         frequency: use to asssociate modulation with the channel
-#     '''
-#     meas_type     = Column(String, default='autodyne', py_check=lambda x: x in ['autodyne', 'homodyne'], nullable=False)
-#     autodyne_freq = Column(Float, default=0.0, nullable=False)
-#     trig_chan     = Column(LogicalMarkerChannel)
+    # def __init__(self, **kwargs):
+    #     if "pulse_params" not in kwargs.keys():
+    #         kwargs["pulse_params"] =  {'length': 20e-9,
+    #                         'piAmp': 1.0,
+    #                         'pi2Amp': 0.5,
+    #                         'shape_fun': "gaussian",
+    #                         'cutoff': 2,
+    #                         'drag_scaling': 0,
+    #                         'sigma': 5e-9}
+    #     super(Qubit, self).__init__(**kwargs)
 
-#     # def __init__(self, **kwargs):
-#     #     if "pulse_params" not in kwargs.keys():
-#     #         kwargs["pulse_params"] =  {'length': 100e-9,
-#     #                             'amp': 1.0,
-#     #                             'shape_fun': "tanh",
-#     #                             'cutoff': 2,
-#     #                             'sigma': 1e-9}
-#     #     super(Measurement, self).__init__(**kwargs)
+class Measurement(LogicalChannel, ChannelMixin):
+    '''
+    A class for measurement channels.
+    Measurements are special because they can be different types:
+    autodyne which needs an IQ pair or hetero/homodyne which needs just a marker channel.
+        meas_type: Type of measurement (autodyne, homodyne)
+        autodyne_freq: use to bake the modulation into the pulse, so that it has constant phase
+        frequency: use to asssociate modulation with the channel
+    '''
+    id = Column(Integer, ForeignKey("logicalchannel.id"), primary_key=True)
 
-# class Edge(LogicalChannel):
-#     '''
-#     Defines an arc/directed edge between qubit vertices. If a device supports bi-directional
-#     connectivity, that is represented with two independent Edges.
+    meas_type     = Column(String, default='autodyne', nullable=False)
+    # autodyne_freq = Column(Float, default=0.0, nullable=False)
+    # trig_chan     = Column(LogicalMarkerChannel)
 
-#     An Edge is also effectively an abstract channel, so it carries the same properties as a
-#     Qubit channel.
-#     '''
-#     # allow string in source and target so that we can store a label or an object
-#     source = Column(Qubit, nullable=False)
-#     target = Column(Qubit, nullable=False)
+    @validates('meas_type')
+    def validate_meas_type(self, key, source):
+        assert source in ['autodyne', 'homodyne']
+        return source
+    
 
-#     # def __init__(self, **kwargs):
-#     #     if "pulse_params" not in kwargs.keys():
-#     #         kwargs["pulse_params"] =   {'length': 20e-9,
-#     #                                     'amp': 1.0,
-#     #                                     'phase': 0.0,
-#     #                                     'shape_fun': "gaussian",
-#     #                                     'cutoff': 2,
-#     #                                     'drag_scaling': 0,
-#     #                                     'sigma': 5e-9,
-#     #                                     'riseFall': 20e-9}
-#     #     super(Edge, self).__init__(**kwargs)
+    # def __init__(self, **kwargs):
+    #     if "pulse_params" not in kwargs.keys():
+    #         kwargs["pulse_params"] =  {'length': 100e-9,
+    #                             'amp': 1.0,
+    #                             'shape_fun': "tanh",
+    #                             'cutoff': 2,
+    #                             'sigma': 1e-9}
+    #     super(Measurement, self).__init__(**kwargs)
+
+class Edge(LogicalChannel, ChannelMixin):
+    '''
+    Defines an arc/directed edge between qubit vertices. If a device supports bi-directional
+    connectivity, that is represented with two independent Edges.
+
+    An Edge is also effectively an abstract channel, so it carries the same properties as a
+    Qubit channel.
+    '''
+    id = Column(Integer, ForeignKey("logicalchannel.id"), primary_key=True)
+    #source = Column(Qubit, nullable=False)
+    #target = Column(Qubit, nullable=False)
+
+    # def __init__(self, **kwargs):
+    #     if "pulse_params" not in kwargs.keys():
+    #         kwargs["pulse_params"] =   {'length': 20e-9,
+    #                                     'amp': 1.0,
+    #                                     'phase': 0.0,
+    #                                     'shape_fun': "gaussian",
+    #                                     'cutoff': 2,
+    #                                     'drag_scaling': 0,
+    #                                     'sigma': 5e-9,
+    #                                     'riseFall': 20e-9}
+    #     super(Edge, self).__init__(**kwargs)
 
 if __name__ == '__main__':
     
