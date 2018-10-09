@@ -30,7 +30,7 @@ from sqlalchemy import Column, DateTime, String, Boolean, Float, Integer, LargeB
 from sqlalchemy.orm import relationship, backref, validates
 from sqlalchemy.ext.declarative import declared_attr
 
-from session import Base, Session, engine
+from . import session #session.Base, Session, engine
 
 class DatabaseItem(object):
     @declared_attr
@@ -48,7 +48,7 @@ class DatabaseItem(object):
     def __str__(self):
         return f"{self.__class__.__name__}('{self.label}')"
 
-class ChannelDatabase(Base):
+class ChannelDatabase(session.Base):
     __tablename__ = "channeldatabase"
     id = Column(Integer, primary_key=True)
 
@@ -56,7 +56,7 @@ class ChannelDatabase(Base):
     time         = Column(DateTime)
 
     channels     = relationship("Channel", backref="channel_db", cascade="all, delete, delete-orphan")
-    sources      = relationship("Generator", backref="channel_db", cascade="all, delete, delete-orphan")
+    generators   = relationship("Generator", backref="channel_db", cascade="all, delete, delete-orphan")
     transmitters = relationship("Transmitter", backref="channel_db", cascade="all, delete, delete-orphan")
     receivers    = relationship("Receiver", backref="channel_db", cascade="all, delete, delete-orphan")
     transceivers = relationship("Transceiver", backref="channel_db", cascade="all, delete, delete-orphan")
@@ -68,12 +68,12 @@ class ChannelDatabase(Base):
     def __str__(self):
         return f"ChannelDatabase(id={self.id}, label={self.label})"
 
-class Instrument(DatabaseItem, Base):
+class Instrument(DatabaseItem, session.Base):
     model      = Column(String, nullable=False)
     address    = Column(String)
     parameters = Column(PickleType, default={}, nullable=False)
     
-class Generator(DatabaseItem, Base):
+class Generator(DatabaseItem, session.Base):
     model            = Column(String, nullable=False)
     address          = Column(String)
     power            = Column(Float, nullable=False)
@@ -81,7 +81,7 @@ class Generator(DatabaseItem, Base):
 
     physicalchannels = relationship("PhysicalChannel", back_populates="generator")
     
-class Receiver(DatabaseItem, Base):
+class Receiver(DatabaseItem, session.Base):
     """A receiver , or generally an analog to digitial converter"""
     model            = Column(String, nullable=False)
     address          = Column(String)
@@ -113,7 +113,7 @@ class Receiver(DatabaseItem, Base):
     #     def __getitem__(self, value):
     #     return self.get_chan(value)
 
-class Transmitter(DatabaseItem, Base):
+class Transmitter(DatabaseItem, session.Base):
     """An arbitrary waveform generator, or generally a digital to analog converter"""
     model            = Column(String, nullable=False)
     address          = Column(String)
@@ -138,13 +138,13 @@ class Transmitter(DatabaseItem, Base):
     # def __getitem__(self, value):
         # return self.get_chan(value)
 
-class Processor(DatabaseItem, Base):
+class Processor(DatabaseItem, session.Base):
     """A hardware unit used for signal processing, e.g. a TDM"""
     model          = Column(String, nullable=False)
     address        = Column(String)
     transceiver_id = Column(Integer, ForeignKey("transceiver.id"))
 
-class Transceiver(DatabaseItem, Base):
+class Transceiver(DatabaseItem, session.Base):
     """A single machine or rack of a2ds and d2as that we want to treat as a unit."""
     model        = Column(String, nullable=False)
     master       = Column(String)
@@ -158,7 +158,7 @@ class Transceiver(DatabaseItem, Base):
     # def get_receiver(self, name):
     #     return self.receivers.select(lambda x: x.label.endswith(name)).first()
 
-class Channel(Base):
+class Channel(session.Base):
     '''
     Every channel has a label and some printers.
     '''
@@ -376,28 +376,25 @@ class Edge(LogicalChannel, ChannelMixin):
                                         'riseFall': 20e-9}
         super(Edge, self).__init__(**kwargs)
 
-if __name__ == '__main__':
+# if __name__ == '__main__':
     
-    from sqlalchemy import create_engine
-    engine = create_engine('sqlite:///:memory:', echo=True)
-    Base.metadata.create_all(engine)
+    # from sqlalchemy import create_engine
+    # engine = create_engine('sqlite:///:memory:', echo=True)
+    # session.Base.metadata.create_all(engine)
+    # Session.configure(bind=engine)
+    # session = Session()
 
-    # from sqlalchemy.orm import sessionmaker
-    # Session = sessionmaker(bind=engine)
-    Session.configure(bind=engine)
-    session = Session()
+    # q1 = Qubit(label="q1")
+    # q2 = Qubit(label="q2")
+    # e1 = Edge(label="e1", source=q1, target=q2)
+    # session.add_all([q1,q2,e1])
 
-    q1 = Qubit(label="q1")
-    q2 = Qubit(label="q2")
-    e1 = Edge(label="e1", source=q1, target=q2)
-    session.add_all([q1,q2,e1])
-
-    b = ChannelDatabase(label="working2")
-    s = Generator(label="Src1", model="abc", power=10.0, frequency=5.0e9)
-    b.sources.append(s)
-    session.add_all([b,s])
-    session.new
-    session.commit()
+    # b = ChannelDatabase(label="working2")
+    # s = Generator(label="Src1", model="abc", power=10.0, frequency=5.0e9)
+    # b.sources.append(s)
+    # session.add_all([b,s])
+    # session.new
+    # session.commit()
 
 
 
