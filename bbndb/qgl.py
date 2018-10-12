@@ -79,7 +79,7 @@ class Generator(DatabaseItem, session.Base):
     power            = Column(Float, nullable=False)
     frequency        = Column(Float, nullable=False)
 
-    physicalchannels = relationship("PhysicalChannel", back_populates="generator")
+    phys_chans = relationship("PhysicalChannel", back_populates="generator")
     
 class Receiver(DatabaseItem, session.Base):
     """A receiver , or generally an analog to digitial converter"""
@@ -227,9 +227,9 @@ class PhysicalChannel(ChannelMixin, Channel):
     delay           = Column(Float, default=0.0, nullable=False)
 
     generator_id    = Column(Integer, ForeignKey("generator.id"))
-    generator       = relationship("Generator", back_populates="physicalchannels")
+    generator       = relationship("Generator", back_populates="phys_chans")
 
-    logicalchannel_id = Column(Integer, ForeignKey("logicalchannel.id"))
+    logical_chan_id = Column(Integer, ForeignKey("logicalchannel.id"))
     
     transmitter_id  = Column(Integer, ForeignKey("transmitter.id"))
     transmitter     = relationship("Transmitter", back_populates="channels")
@@ -247,8 +247,8 @@ class LogicalChannel(ChannelMixin, Channel):
     frequency    = Column(Float, default=0.0, nullable=False)
     pulse_params = Column(PickleType, default={})
 
-    physicalchannel = relationship("PhysicalChannel", uselist=False, backref="logicalchannel", 
-                                   foreign_keys="[PhysicalChannel.logicalchannel_id]")
+    phys_chan = relationship("PhysicalChannel", uselist=False, backref="logical_chan", 
+                                   foreign_keys="[PhysicalChannel.logical_chan_id]")
 
 class PhysicalMarkerChannel(PhysicalChannel, ChannelMixin):
     '''
