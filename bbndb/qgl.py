@@ -99,19 +99,25 @@ class Receiver(DatabaseItem, session.Base):
 
     @validates('acquire_mode')
     def validate_acquire_mode(self, key, source):
-        assert source in ['digitizer ', 'averager']
+        assert source in ['digitizer', 'averager']
         return source
     
     @validates('trigger_source')
     def validate_trigger_source(self, key, source):
         assert source in ['external', 'internal']
         return source
-    # def get_chan(self, name):
-    #     return self.channels.select(lambda x: x.label.endswith(name)).first()
-    # def ch(self, name):
-    #     return self.get_chan(name)
-    #     def __getitem__(self, value):
-    #     return self.get_chan(value)
+    def get_chan(self, name):
+        matches = [c for c in self.channels if c.label.endswith(name)]
+        if len(matches) == 0:
+            raise ValueException(f"Could not find a channel name on receiver {self.label} ending with {name}")
+        elif len(matches) > 1:
+            raise ValueException(f"Found {len(matches)} matches for channels on receiver {self.label} whose names end with {name}")
+        else:
+            return matches[0]
+    def ch(self, name):
+        return self.get_chan(name)
+    def __getitem__(self, value):
+        return self.get_chan(value)
 
 class Transmitter(DatabaseItem, session.Base):
     """An arbitrary waveform generator, or generally a digital to analog converter"""
@@ -130,7 +136,18 @@ class Transmitter(DatabaseItem, session.Base):
     def validate_trigger_source(self, key, source):
         assert source in ['external', 'internal']
         return source
-    
+    def get_chan(self, name):
+        matches = [c for c in self.channels if c.label.endswith(name)]
+        if len(matches) == 0:
+            raise ValueException(f"Could not find a channel name on transmitter {self.label} ending with {name}")
+        elif len(matches) > 1:
+            raise ValueException(f"Found {len(matches)} matches for channels on transmitter {self.label} whose names end with {name}")
+        else:
+            return matches[0]
+    def ch(self, name):
+        return self.get_chan(name)
+    def __getitem__(self, value):
+        return self.get_chan(value)
     # def get_chan(self, name):
     #     return self.channels.select(lambda x: x.label.endswith(name)).first()
     # def ch(self, name):
@@ -153,10 +170,22 @@ class Transceiver(DatabaseItem, session.Base):
     transmitters = relationship("Transmitter", backref="transceiver")
     processors   = relationship("Processor", backref="transceiver")
 
-    # def get_transmitter(self, name):
-    #     return self.transmitters.select(lambda x: x.label.endswith(name)).first()
-    # def get_receiver(self, name):
-    #     return self.receivers.select(lambda x: x.label.endswith(name)).first()
+    def get_transmitter(self, name):
+        matches = [c for c in self.transmitters if c.label.endswith(name)]
+        if len(matches) == 0:
+            raise ValueException(f"Could not find a transmitter name on transceiver {self.label} ending with {name}")
+        elif len(matches) > 1:
+            raise ValueException(f"Found {len(matches)} matches for transmitter on transceiver {self.label} whose names end with {name}")
+        else:
+            return matches[0]
+    def get_recevier(self, name):
+        matches = [c for c in self.receviers if c.label.endswith(name)]
+        if len(matches) == 0:
+            raise ValueException(f"Could not find a recevier name on transceiver {self.label} ending with {name}")
+        elif len(matches) > 1:
+            raise ValueException(f"Found {len(matches)} matches for recevier on transceiver {self.label} whose names end with {name}")
+        else:
+            return matches[0]
 
 class Channel(session.Base):
     '''
@@ -172,17 +201,8 @@ class Channel(session.Base):
         'polymorphic_identity':'channel',
         'polymorphic_on':type
     }
-    # def __setattr__(self, attr, value):
-    #     if cache_callback:
-    #         if attr in [a.name for a in self._attrs_]:
-    #             cache_callback()
-    #     super(Channel, self).__setattr__(attr, value)
 
 class ChannelMixin(object):
-    # Omit the __tablename__ so that all channels occupy the same table
-    # @declared_attr
-    # def channel_db_id(cls):
-    #     return Column(Integer, ForeignKey('channeldatabase.id'))
     @declared_attr
     def id(cls):
         return Column(Integer, ForeignKey("channel.id"), primary_key=True)
@@ -192,7 +212,6 @@ class ChannelMixin(object):
     @declared_attr
     def __tablename__(cls):
         return cls.__name__.lower()
-
     def __repr__(self):
         return str(self)
     def __str__(self):
@@ -215,9 +234,9 @@ class PhysicalChannel(ChannelMixin, Channel):
     transmitter_id  = Column(Integer, ForeignKey("transmitter.id"))
     transmitter     = relationship("Transmitter", back_populates="channels")
 
-    # def q(self):
-        # if isinstance(self.logical_channel, Qubit):
-            # return self.logical_channel
+    def q(self):
+        if isinstance(self.logical_channel, Qubit):
+            return self.logical_channel
 
 class LogicalChannel(ChannelMixin, Channel):
     '''
