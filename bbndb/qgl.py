@@ -327,6 +327,8 @@ class Qubit(LogicalChannel, ChannelMixin):
     edge_source_id = Column(Integer, ForeignKey("edge.id"))
     edge_target_id = Column(Integer, ForeignKey("edge.id"))
 
+    measure_chan = relationship("Measurement", uselist=False, backref="control_chan", foreign_keys="[Measurement.control_chan_id]")
+
     def __init__(self, **kwargs):
         if "pulse_params" not in kwargs.keys():
             kwargs["pulse_params"] =  {'length': 20e-9,
@@ -351,6 +353,8 @@ class Measurement(LogicalChannel, ChannelMixin):
 
     meas_type     = Column(String, default='autodyne', nullable=False)
     autodyne_freq = Column(Float, default=0.0, nullable=False)
+
+    control_chan_id = Column(Integer, ForeignKey("qubit.id"))
 
     trig_chan     = relationship("LogicalMarkerChannel", uselist=False, backref="meas_chan", foreign_keys="[LogicalMarkerChannel.meas_chan_id]")
     gate_chan     = relationship("LogicalMarkerChannel", uselist=False, backref="trig_meas", foreign_keys="[LogicalMarkerChannel.meas_gate_id]")
