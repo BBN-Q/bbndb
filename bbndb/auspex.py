@@ -15,6 +15,7 @@ class Connection(session.Base):
     node1_id      = Column(Integer, ForeignKey("nodeproxy.id"))
     node2_id      = Column(Integer, ForeignKey("nodeproxy.id"))
     pipeline_name = Column(String, nullable=False)
+    time          = Column(DateTime)
 
 class NodeProxy(session.Base):
     __tablename__ = "nodeproxy"
@@ -66,10 +67,12 @@ class FilterProxy(NodeMixin, NodeProxy):
         return filter_obj
 
     def node_label(self):
-        return f"{self.__class__.__name__} {self.label}\n({self.qubit_name})"
+        label = self.label if self.label else ""
+        return f"{self.__class__.__name__} {label}\n({self.qubit_name})"
 
     def __repr__(self):
-        return f"{self.__class__.__name__} {self.label} ({self.qubit_name})"
+        label = self.label if self.label else ""
+        return f"{self.__class__.__name__} {label} ({self.qubit_name})"
 
     def __getitem__(self, key):
         ss = list(self.exp.meas_graph.successors(self))
