@@ -59,14 +59,9 @@ class FilterProxy(NodeMixin, NodeProxy):
             print("This filter may have been orphaned by a clear_pipeline call!")
             return
 
-        # commit() # Make sure filter_obj is in the db
-        
         filter_obj.exp = self.exp
         filter_obj.qubit_name = self.qubit_name
-        # with db_session:
-        #     FilterProxy[filter_obj.id].qubit_name = self.qubit_name
-        commit()
-        #     fp = FilterProxy[filter_obj.id]
+
         self.exp.meas_graph.add_edge(self, filter_obj)
         return filter_obj
 
@@ -220,8 +215,6 @@ class QubitProxy(NodeMixin, NodeProxy):
 
     def clear_pipeline(self):
         """Remove all nodes coresponding to the qubit"""
-        # nodes_to_remove = [n for n in self.exp.meas_graph.nodes() if n.qubit_name == self.qubit_name]
-        # self.exp.meas_graph.remove_nodes_from(nodes_to_remove)
         desc = nx.algorithms.dag.descendants(self.exp.meas_graph, self)
         for n in desc:
             n.exp = None

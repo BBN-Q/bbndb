@@ -6,6 +6,9 @@ from contextlib import contextmanager
 # configure Session to be used by all importers
 Session = sessionmaker()
 
+# Actual current session
+session = None
+
 # engine to be used by all importers
 engine = None
 

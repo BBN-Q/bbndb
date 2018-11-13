@@ -2,7 +2,7 @@
 # from .qgl import define_entities as qgl_ent
 from . import qgl
 from . import auspex
-from .session import Session, engine, Base, session_scope
+from .session import Session, engine, Base, session_scope, session
 from sqlalchemy import create_engine
 from sqlalchemy.inspection import inspect
 from sqlalchemy.orm import class_mapper
