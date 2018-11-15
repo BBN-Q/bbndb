@@ -223,7 +223,7 @@ class QubitProxy(NodeMixin, NodeProxy):
             n.exp = None
         self.exp.meas_graph.remove_nodes_from(desc)
 
-    def auto_create_pipeline(self, buffers=False):
+    def create_default_pipeline(self, buffers=False):
         Output = Buffer if buffers else Write
         if self.stream_type.lower() == "raw":
             self.add(Demodulate()).add(Integrate()).add(Average()).add(Output())
