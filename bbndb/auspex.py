@@ -92,11 +92,13 @@ class FilterProxy(NodeMixin, NodeProxy):
 
     def node_label(self):
         label = self.label if self.label else ""
-        return f"{self.__class__.__name__} {label}\n({self.qubit_name})"
+        return f"{self.__class__.__name__} {label} ({self.qubit_name})"
 
     def __repr__(self):
-        label = self.label if self.label else ""
-        return f"{self.__class__.__name__} {label} ({self.qubit_name})"
+        return f"{self.__class__.__name__} {self.label} ({self.qubit_name})"
+
+    def __str__(self):
+        return f"{self.__class__.__name__} {self.label} ({self.qubit_name})"
 
     def __getitem__(self, key):
         ss = list(self.exp.meas_graph.successors(self))
@@ -248,7 +250,7 @@ class QubitProxy(NodeMixin, NodeProxy):
         desc = nx.algorithms.dag.descendants(self.exp.meas_graph, self)
         for n in desc:
             n.exp = None
-            self.pipelineMgr.session.delete(n)
+            self.pipelineMgr.session.expunge(n)
         self.exp.meas_graph.remove_nodes_from(desc)
         
     def create_default_pipeline(self, buffers=False):
@@ -276,6 +278,9 @@ class QubitProxy(NodeMixin, NodeProxy):
         return self.__repr__()
 
     def __repr__(self):
+        return f"Qubit {self.qubit_name}"
+
+    def __str__(self):
         return f"Qubit {self.qubit_name}"
 
     def __getitem__(self, key):
