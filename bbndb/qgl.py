@@ -26,11 +26,32 @@ from math import tan, cos, pi
 from copy import deepcopy
 import datetime
 
-from sqlalchemy import Column, DateTime, String, Boolean, Float, Integer, LargeBinary, ForeignKey, func, JSON, PickleType
+from sqlalchemy import Column, DateTime, String, Boolean, Float, Integer, LargeBinary, ForeignKey, func, PickleType
+from sqlalchemy.ext.mutable import Mutable
 from sqlalchemy.orm import relationship, backref, validates
 from sqlalchemy.ext.declarative import declared_attr
 
 from . import session #session.Base, Session, engine
+
+class MutableDict(Mutable, dict):
+    @classmethod
+    def coerce(cls, key, value):
+        if not isinstance(value, MutableDict):
+            if isinstance(value, dict):
+                return MutableDict(value)
+            return Mutable.coerce(key, value)
+        else:
+            return value
+    def __delitem(self, key):
+        dict.__delitem__(self, key)
+        self.changed()
+    def __setitem__(self, key, value):
+        dict.__setitem__(self, key, value)
+        self.changed()
+    def __getstate__(self):
+        return dict(self)
+    def __setstate__(self, state):
+        self.update(self)
 
 class DatabaseItem(object):
     @declared_attr
@@ -71,7 +92,7 @@ class ChannelDatabase(session.Base):
 class Instrument(DatabaseItem, session.Base):
     model      = Column(String, nullable=False)
     address    = Column(String)
-    parameters = Column(PickleType, default={}, nullable=False)
+    parameters = Column(MutableDict.as_mutable(PickleType), default={}, nullable=False)
     
 class Generator(DatabaseItem, session.Base):
     model            = Column(String, nullable=False)
@@ -245,7 +266,7 @@ class LogicalChannel(ChannelMixin, Channel):
         frequency: modulation frequency of the channel (can be positive or negative)
     '''
     frequency    = Column(Float, default=0.0, nullable=False)
-    pulse_params = Column(PickleType, default={})
+    pulse_params = Column(MutableDict.as_mutable(PickleType), default={})
 
     phys_chan = relationship("PhysicalChannel", uselist=False, backref="logical_chan", 
                                    foreign_keys="[PhysicalChannel.logical_chan_id]")
