@@ -6,6 +6,8 @@ import networkx as nx
 from sqlalchemy import Column, DateTime, String, Boolean, Float, Integer, LargeBinary, ForeignKey, func, JSON, PickleType
 from sqlalchemy.orm import relationship, backref, validates
 from sqlalchemy.ext.declarative import declared_attr
+from sqlalchemy import inspect
+from IPython.display import HTML, display
 
 from . import session #session.Base, Session, engine
 
@@ -30,6 +32,17 @@ class NodeProxy(session.Base):
         'polymorphic_identity':'channel',
         'polymorphic_on':node_type
     }
+
+    def print(self):
+        table_code = ""
+        label = self.label if self.label else "Unlabeled"
+        inspr = inspect(self)
+        for c in list(self.__mapper__.columns):
+            if c.name not in ["id", "label", "qubit_name", "node_type"]:
+                hist = getattr(inspr.attrs, c.name).history
+                dirty = "Yes" if hist.has_changes() else ""
+                table_code += f"<tr><td>{c.name}</td><td>{getattr(self,c.name)}</td><td>{dirty}</td></tr>"
+        display(HTML(f"<b>{self.node_type}</b> ({self.qubit_name}) <i>{label}</i></br><table><tr><th>Attribute</th><th>Value</th><th>Uncommitted Changes</th></tr><tr>{table_code}</tr></table>"))
 
 class NodeMixin(object):
     @declared_attr
@@ -57,14 +70,25 @@ class FilterProxy(NodeMixin, NodeProxy):
 
     def add(self, filter_obj):
         if not self.exp:
-            print("This filter may have been orphaned by a clear_pipeline call!")
-            return
+            raise Exception("This filter does not correspond to any experiment. Please file a bug report.")
+        if not self.pipelineMgr:
+            raise Exception("This filter does not know about any pipeline manager.")
 
         filter_obj.exp = self.exp
+        filter_obj.pipelineMgr = self.pipelineMgr
         filter_obj.qubit_name = self.qubit_name
 
         self.exp.meas_graph.add_edge(self, filter_obj)
+        self.pipelineMgr.session.add(filter_obj)
         return filter_obj
+
+    def drop(self):
+        desc = list(nx.algorithms.dag.descendants(self.exp.meas_graph, self))
+        desc.append(self)
+        self.exp.meas_graph.remove_nodes_from(desc)
+        for n in desc:
+            n.exp = None
+            self.pipelineMgr.session.expunge(n)
 
     def node_label(self):
         label = self.label if self.label else ""
@@ -200,12 +224,15 @@ class QubitProxy(NodeMixin, NodeProxy):
 
     def add(self, filter_obj):
         if not self.exp:
-            print("This qubit may have been orphaned!")
-            return
+            raise Exception("This qubit does not correspond to any experiment. Please file a bug report.")
+        if not self.pipelineMgr:
+            raise Exception("This qubit does not know about any pipeline manager.")
 
-        filter_obj.qubit_name = self.qubit_name
-        filter_obj.exp = self.exp
+        filter_obj.qubit_name  = self.qubit_name
+        filter_obj.pipelineMgr = self.pipelineMgr
+        filter_obj.exp         = self.exp
         self.exp.meas_graph.add_edge(self, filter_obj)
+        self.pipelineMgr.session.add(filter_obj)
 
         return filter_obj
 
@@ -221,8 +248,9 @@ class QubitProxy(NodeMixin, NodeProxy):
         desc = nx.algorithms.dag.descendants(self.exp.meas_graph, self)
         for n in desc:
             n.exp = None
+            self.pipelineMgr.session.delete(n)
         self.exp.meas_graph.remove_nodes_from(desc)
-
+        
     def create_default_pipeline(self, buffers=False):
         Output = Buffer if buffers else Write
         if self.stream_type.lower() == "raw":
