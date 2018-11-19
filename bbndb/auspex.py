@@ -25,8 +25,8 @@ class NodeProxy(session.Base):
     label           = Column(String)
     qubit_name      = Column(String)
     node_type       = Column(String(50))
-    connection_to   = relationship("Connection", backref='node1', foreign_keys="[Connection.node1_id]")
-    connection_from = relationship("Connection", backref='node2', foreign_keys="[Connection.node2_id]")
+    connection_to   = relationship("Connection", uselist=False, backref='node1', foreign_keys="[Connection.node1_id]")
+    connection_from = relationship("Connection", uselist=False, backref='node2', foreign_keys="[Connection.node2_id]")
 
     __mapper_args__ = {
         'polymorphic_identity':'channel',
@@ -63,31 +63,30 @@ class FilterProxy(NodeMixin, NodeProxy):
     """docstring for FilterProxy"""
 
     def __init__(self, **kwargs):
-        global __current_exp__
+        global __current_pipeline__
         # with db_session:
         super(FilterProxy, self).__init__(**kwargs)
-        self.exp = __current_exp__
+        self.pipelineMgr = __current_pipeline__
 
     def add(self, filter_obj):
-        if not self.exp:
-            raise Exception("This filter does not correspond to any experiment. Please file a bug report.")
+        # if not self.pipeline:
+        #     raise Exception("This filter does not correspond to any experiment. Please file a bug report.")
         if not self.pipelineMgr:
             raise Exception("This filter does not know about any pipeline manager.")
 
-        filter_obj.exp = self.exp
         filter_obj.pipelineMgr = self.pipelineMgr
         filter_obj.qubit_name = self.qubit_name
 
-        self.exp.meas_graph.add_edge(self, filter_obj)
+        self.pipelineMgr.meas_graph.add_edge(self, filter_obj)
         self.pipelineMgr.session.add(filter_obj)
         return filter_obj
 
     def drop(self):
-        desc = list(nx.algorithms.dag.descendants(self.exp.meas_graph, self))
+        desc = list(nx.algorithms.dag.descendants(self.pipelineMgr.meas_graph, self))
         desc.append(self)
-        self.exp.meas_graph.remove_nodes_from(desc)
+        self.pipelineMgr.meas_graph.remove_nodes_from(desc)
         for n in desc:
-            n.exp = None
+            # n.exp = None
             self.pipelineMgr.session.expunge(n)
 
     def node_label(self):
@@ -101,7 +100,7 @@ class FilterProxy(NodeMixin, NodeProxy):
         return f"{self.__class__.__name__} {self.label} ({self.qubit_name})"
 
     def __getitem__(self, key):
-        ss = list(self.exp.meas_graph.successors(self))
+        ss = list(self.pipelineMgr.meas_graph.successors(self))
         label_matches = [s for s in ss if s.label == key]
         class_matches = [s for s in ss if s.__class__.__name__ == key]
         if len(label_matches) == 1:
@@ -214,26 +213,25 @@ class QubitProxy(NodeMixin, NodeProxy):
     """docstring for FilterProxy"""
     id = Column(Integer, ForeignKey("nodeproxy.id"), primary_key=True)
 
-    def __init__(self, exp, qubit_name):
-        global __current_exp__
-        super(QubitProxy, self).__init__(qubit_name=qubit_name)
-        self.exp = exp
-        __current_exp__ = exp
-        # self.qubit_name = qubit_name
+    def __init__(self, pipelineMgr=None, **kwargs):
+        global __current_pipeline__
+        super(QubitProxy, self).__init__(**kwargs)
+        self.pipelineMgr = pipelineMgr
+        __current_pipeline__ = pipelineMgr
         self.digitizer_settings = None
         self.available_streams = None
         self.stream_type = None
 
     def add(self, filter_obj):
-        if not self.exp:
-            raise Exception("This qubit does not correspond to any experiment. Please file a bug report.")
+        # if not self.pipeline:
+        #     raise Exception("This qubit does not correspond to any experiment. Please file a bug report.")
         if not self.pipelineMgr:
             raise Exception("This qubit does not know about any pipeline manager.")
 
         filter_obj.qubit_name  = self.qubit_name
         filter_obj.pipelineMgr = self.pipelineMgr
-        filter_obj.exp         = self.exp
-        self.exp.meas_graph.add_edge(self, filter_obj)
+        # filter_obj.exp         = self.pipeline
+        self.pipelineMgr.meas_graph.add_edge(self, filter_obj)
         self.pipelineMgr.session.add(filter_obj)
 
         return filter_obj
@@ -247,11 +245,11 @@ class QubitProxy(NodeMixin, NodeProxy):
 
     def clear_pipeline(self):
         """Remove all nodes coresponding to the qubit"""
-        desc = nx.algorithms.dag.descendants(self.exp.meas_graph, self)
+        desc = nx.algorithms.dag.descendants(self.pipelineMgr.meas_graph, self)
         for n in desc:
-            n.exp = None
+            # n.exp = None
             self.pipelineMgr.session.expunge(n)
-        self.exp.meas_graph.remove_nodes_from(desc)
+        self.pipelineMgr.meas_graph.remove_nodes_from(desc)
         
     def create_default_pipeline(self, buffers=False):
         Output = Buffer if buffers else Write
@@ -265,11 +263,11 @@ class QubitProxy(NodeMixin, NodeProxy):
             self.add(Output())
 
     def show_pipeline(self):
-        desc = list(nx.algorithms.dag.descendants(self.exp.meas_graph, self)) + [self]
+        desc = list(nx.algorithms.dag.descendants(self.pipelineMgr.meas_graph, self)) + [self]
         labels = {n: n.node_label() for n in desc}
-        subgraph = self.exp.meas_graph.subgraph(desc)
+        subgraph = self.pipelineMgr.meas_graph.subgraph(desc)
         colors = ["#3182bd" if isinstance(n, QubitProxy) else "#ff9933" for n in subgraph.nodes()]
-        self.exp.plot_graph(subgraph, labels, colors=colors, prog='dot')
+        self.pipelineMgr.plot_graph(subgraph, labels, colors=colors, prog='dot')
 
     def show_connectivity(self):
         pass
@@ -284,7 +282,7 @@ class QubitProxy(NodeMixin, NodeProxy):
         return f"Qubit {self.qubit_name}"
 
     def __getitem__(self, key):
-        ss = list(self.exp.meas_graph.successors(self))
+        ss = list(self.pipelineMgr.meas_graph.successors(self))
         label_matches = [s for s in ss if s.label == key]
         class_matches = [s for s in ss if s.__class__.__name__ == key]
         if len(label_matches) == 1:
