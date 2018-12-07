@@ -1,292 +1,445 @@
-from pony.orm import *
+'''
+Channels is where we store information for mapping virtual (qubit) channel to real channels.
+
+Created on Jan 19, 2012 in the QGL package
+
+Original Author: Colm Ryan
+Modified By: Graham Rowlands (moved to bbndb and ported to ORM)
+
+Copyright 2013 Raytheon BBN Technologies
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+   http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+'''
+
 import numpy as np
 from math import tan, cos, pi
 from copy import deepcopy
 import datetime
 
-# Get these in global scope for module imports
-Channel = None
-PhysicalChannel = None
-LogicalChannel = None
-PhysicalQuadratureChannel = None
-PhysicalMarkerChannel = None
-LogicalMarkerChannel = None
-ReceiverChannel = None
-Measurement = None
-Qubit = None
-Edge = None
-MicrowaveSource = None
-ChannelDatabase = None
-Digitizer = None
-AWG = None
+from sqlalchemy import Column, DateTime, String, Boolean, Float, Integer, LargeBinary, ForeignKey, func, PickleType
+from sqlalchemy.ext.mutable import Mutable
+from sqlalchemy.orm import relationship, backref, validates
+from sqlalchemy.ext.declarative import declared_attr
 
-def define_entities(db, cache_callback=None):
+from . import session #session.Base, Session, engine
 
-    class ChannelDatabase(db.Entity):
-        label      = Required(str)
-        channels   = Set("Channel", cascade_delete=True)
-        sources    = Set("MicrowaveSource", cascade_delete=True)
-        awgs       = Set("AWG", cascade_delete=True)
-        digitizers = Set("Digitizer", cascade_delete=True)
-        time       = Optional(datetime.datetime)
-        def __repr__(self):
-            return str(self)
-        def __str__(self):
-            return f"{self.__class__.__name__}('{self.label}')"
+class MutableDict(Mutable, dict):
+    @classmethod
+    def coerce(cls, key, value):
+        if not isinstance(value, MutableDict):
+            if isinstance(value, dict):
+                return MutableDict(value)
+            return Mutable.coerce(key, value)
+        else:
+            return value
+    def __delitem(self, key):
+        dict.__delitem__(self, key)
+        self.changed()
+    def __setitem__(self, key, value):
+        dict.__setitem__(self, key, value)
+        self.changed()
+    def __getstate__(self):
+        return dict(self)
+    def __setstate__(self, state):
+        self.update(self)
 
-    class Instrument(db.Entity):
-        label      = Required(str)
-        model      = Required(str)
-        address    = Optional(str)
-        parameters = Required(Json, default={})
-        def __repr__(self):
-            return str(self)
-        def __str__(self):
-            return f"{self.__class__.__name__}('{self.label}')"
+class DatabaseItem(object):
+    @declared_attr
+    def __tablename__(cls):
+        return cls.__name__.lower()
+    @declared_attr
+    def channel_db_id(cls):
+        return Column(Integer, ForeignKey('channeldatabase.id'))
 
-    class MicrowaveSource(db.Entity):
-        label           = Required(str)
-        model           = Required(str)
-        address         = Optional(str)
-        power           = Required(float)
-        frequency       = Required(float)
-        logical_channel = Optional("PhysicalChannel")
-        channel_db      = Optional("ChannelDatabase")
-        def __repr__(self):
-            return str(self)
-        def __str__(self):
-            return f"{self.__class__.__name__}('{self.label}')"
+    id    = Column(Integer, primary_key=True)
+    label = Column(String, nullable=False)
 
-    class Digitizer(db.Entity):
-        label            = Required(str)
-        model            = Required(str)
-        address          = Optional(str)
-        stream_types     = Required(str, default="raw")
-        channels         = Set("ReceiverChannel")
-        trigger_source   = Required(str, default="External", py_check=lambda x: x in ['External', 'Internal'])
-        channel_db       = Optional("ChannelDatabase")
-        record_length    = Required(int, default=1024)
-        sampling_rate    = Required(float, default=1e9)
-        number_segments  = Required(int, default=1) # This should be automatic
-        number_waveforms = Required(int, default=1) # This should be automatic
-        number_averages  = Required(int, default=100) # This should be automatic
-        # acquire_mode     = Required(str,default="digitizer", py_check=lambda x: x in ['digitizer', 'averager'])
+    def __repr__(self):
+        return str(self)
+    def __str__(self):
+        return f"{self.__class__.__name__}('{self.label}')"
 
-        @db_session
-        def get_chan(self, name):
-            return self.channels.select(lambda x: x.label.endswith(name)).first()
-        def ch(self, name):
-            return self.get_chan(name)
-        def __repr__(self):
-            return str(self)
-        def __str__(self):
-            return f"{self.__class__.__name__}('{self.label}')"
-        def __getitem__(self, value):
-            return self.get_chan(value)
+class ChannelDatabase(session.Base):
+    __tablename__ = "channeldatabase"
+    id = Column(Integer, primary_key=True)
 
-    class AWG(db.Entity):
-        label            = Required(str)
-        model            = Required(str)
-        address          = Optional(str)
-        channels         = Set("PhysicalChannel", reverse="awg")
-        trigger_interval = Required(float, default=100e-6)
-        trigger_source   = Required(str, default="External", py_check=lambda x: x in ['External', 'Internal'])
-        delay            = Required(float, default=0.0)
-        master           = Required(bool, default=False)
-        channel_db       = Optional("ChannelDatabase")
-        sequence_file    = Optional(str)
+    label        = Column(String, nullable=False)
+    time         = Column(DateTime)
 
-        @db_session
-        def get_chan(self, name):
-            return self.channels.select(lambda x: x.label.endswith(name)).first()
-        def ch(self, name):
-            return self.get_chan(name)
-        def __repr__(self):
-            return str(self)
-        def __str__(self):
-            return f"{self.__class__.__name__}('{self.label}')"
-        def __getitem__(self, value):
-            return self.get_chan(value)
+    channels     = relationship("Channel", backref="channel_db", cascade="all, delete, delete-orphan")
+    generators   = relationship("Generator", backref="channel_db", cascade="all, delete, delete-orphan")
+    transmitters = relationship("Transmitter", backref="channel_db", cascade="all, delete, delete-orphan")
+    receivers    = relationship("Receiver", backref="channel_db", cascade="all, delete, delete-orphan")
+    transceivers = relationship("Transceiver", backref="channel_db", cascade="all, delete, delete-orphan")
+    instruments  = relationship("Instrument", backref="channel_db", cascade="all, delete, delete-orphan")
+    processors   = relationship("Processor", backref="channel_db", cascade="all, delete, delete-orphan")
+    
+    def __repr__(self):
+        return str(self)
+    def __str__(self):
+        return f"ChannelDatabase(id={self.id}, label={self.label})"
 
-    class Channel(db.Entity):
-        '''
-        Every channel has a label and some printers.
-        '''
-        label      = Required(str)
-        channel_db = Optional("ChannelDatabase")
+class Instrument(DatabaseItem, session.Base):
+    model      = Column(String, nullable=False)
+    address    = Column(String)
+    parameters = Column(MutableDict.as_mutable(PickleType), default={}, nullable=False)
+    
+class Generator(DatabaseItem, session.Base):
+    model            = Column(String, nullable=False)
+    address          = Column(String)
+    power            = Column(Float, nullable=False)
+    frequency        = Column(Float, nullable=False)
 
-        def __repr__(self):
-            return str(self)
-        def __str__(self):
-            return f"{self.__class__.__name__}('{self.label}')"
-        def __setattr__(self, attr, value):
-            if cache_callback:
-                if attr in [a.name for a in self._attrs_]:
-                    cache_callback()
-            super(Channel, self).__setattr__(attr, value)
+    phys_chans = relationship("PhysicalChannel", back_populates="generator")
+    
+class Receiver(DatabaseItem, session.Base):
+    """A receiver , or generally an analog to digitial converter"""
+    model            = Column(String, nullable=False)
+    address          = Column(String)
+    stream_types     = Column(String, default="raw", nullable=False)
+    trigger_source   = Column(String, default="external", nullable=False)
+    record_length    = Column(Integer, default=1024, nullable=False)
+    sampling_rate    = Column(Float, default=1e9, nullable=False)
+    number_segments  = Column(Integer, default=1) # This should be automati, nullable=Falsec
+    number_waveforms = Column(Integer, default=1) # This should be automati, nullable=Falsec
+    number_averages  = Column(Integer, default=100) # This should be automati, nullable=Falsec
+    transceiver_id   = Column(Integer, ForeignKey("transceiver.id"))
+    acquire_mode     = Column(String, default="digitizer", nullable=False)
 
-    class PhysicalChannel(Channel):
-        '''
-        The main class for actual AWG channels.
-        '''
-        instrument      = Optional(str) # i.e. the AWG or receiver
-        translator      = Optional(str)
-        generator       = Optional(MicrowaveSource, reverse="logical_channel")
-        sampling_rate   = Required(float, default=1.2e9)
-        delay           = Required(float, default=0.0)
+    channels = relationship("ReceiverChannel", back_populates="receiver", cascade="all, delete, delete-orphan")
 
-        # Required reverse connections
-        logical_channel = Optional("LogicalChannel")
-        # quad_channel_I  = Optional("PhysicalQuadratureChannel", reverse="I_channel")
-        # quad_channel_Q  = Optional("PhysicalQuadratureChannel", reverse="Q_channel")
-        # marker_channel  = Optional("PhysicalMarkerChannel")
-        awg             = Optional(AWG)
+    @validates('acquire_mode')
+    def validate_acquire_mode(self, key, source):
+        assert source in ['digitizer', 'averager']
+        return source
+    
+    @validates('trigger_source')
+    def validate_trigger_source(self, key, source):
+        assert source in ['external', 'internal']
+        return source
+    def get_chan(self, name):
+        matches = [c for c in self.channels if c.label.endswith(name)]
+        if len(matches) == 0:
+            raise ValueException(f"Could not find a channel name on receiver {self.label} ending with {name}")
+        elif len(matches) > 1:
+            raise ValueException(f"Found {len(matches)} matches for channels on receiver {self.label} whose names end with {name}")
+        else:
+            return matches[0]
+    def ch(self, name):
+        return self.get_chan(name)
+    def __getitem__(self, value):
+        return self.get_chan(value)
 
-        def q(self):
-            if isinstance(self.logical_channel, Qubit):
-                return self.logical_channel
+class Transmitter(DatabaseItem, session.Base):
+    """An arbitrary waveform generator, or generally a digital to analog converter"""
+    model            = Column(String, nullable=False)
+    address          = Column(String)
+    trigger_interval = Column(Float, default=100e-6, nullable=False)
+    trigger_source   = Column(String, default="external", nullable=False)
+    delay            = Column(Float, default=0.0, nullable=False)
+    master           = Column(Boolean, default=False, nullable=False)
+    sequence_file    = Column(String)
+    transceiver_id   = Column(Integer, ForeignKey("transceiver.id"))
+    
+    channels = relationship("PhysicalChannel", back_populates="transmitter", cascade="all, delete, delete-orphan")
 
-    class LogicalChannel(Channel):
-        '''
-        The main class from which we will generate sequences.
-        At some point it needs to be assigned to a physical channel.
-            frequency: modulation frequency of the channel (can be positive or negative)
-        '''
-        #During initilization we may just have a string reference to the channel
-        phys_chan     = Optional(PhysicalChannel)
-        frequency     = Required(float, default=0.0)
-        pulse_params  = Optional(Json, default={})
-        gate_chan     = Optional("LogicalMarkerChannel")
-        receiver_chan = Optional("ReceiverChannel")
+    @validates('trigger_source')
+    def validate_trigger_source(self, key, source):
+        assert source in ['external', 'internal']
+        return source
+    def get_chan(self, name):
+        matches = [c for c in self.channels if c.label.endswith(name)]
+        if len(matches) == 0:
+            raise ValueException(f"Could not find a channel name on transmitter {self.label} ending with {name}")
+        elif len(matches) > 1:
+            raise ValueException(f"Found {len(matches)} matches for channels on transmitter {self.label} whose names end with {name}")
+        else:
+            return matches[0]
+    def ch(self, name):
+        return self.get_chan(name)
+    def __getitem__(self, value):
+        return self.get_chan(value)
+    # def get_chan(self, name):
+    #     return self.channels.select(lambda x: x.label.endswith(name)).first()
+    # def ch(self, name):
+    #     return self.get_chan(name)
+    # def __getitem__(self, value):
+        # return self.get_chan(value)
 
-    class PhysicalMarkerChannel(PhysicalChannel):
-        '''
-        A digital output channel on an AWG.
-            gate_buffer: How much extra time should be added onto the beginning of a gating pulse
-            gate_min_width: The minimum marker pulse width
-        '''
-        gate_buffer    = Required(float, default=0.0)
-        gate_min_width = Required(float, default=0.0)
-        # phys_channel   = Optional(PhysicalChannel)
+class Processor(DatabaseItem, session.Base):
+    """A hardware unit used for signal processing, e.g. a TDM"""
+    model          = Column(String, nullable=False)
+    address        = Column(String)
+    transceiver_id = Column(Integer, ForeignKey("transceiver.id"))
 
-    class PhysicalQuadratureChannel(PhysicalChannel):
-        '''
-        Something used to implement a standard qubit channel with two analog channels and a microwave gating channel.
-        '''
-        amp_factor           = Required(float, default=1.0)
-        phase_skew           = Required(float, default=0.0)
-        I_channel_offset     = Required(float, default=0.0)
-        Q_channel_offset     = Required(float, default=0.0)
-        I_channel_amp_factor = Required(float, default=1.0)
-        Q_channel_amp_factor = Required(float, default=1.0)
+class Transceiver(DatabaseItem, session.Base):
+    """A single machine or rack of a2ds and d2as that we want to treat as a unit."""
+    model        = Column(String, nullable=False)
+    master       = Column(String)
 
-    class ReceiverChannel(PhysicalChannel):
-        '''
-        A trigger input on a receiver.
-        '''
-        triggering_channel = Optional(LogicalChannel)
-        channel            = Required(int)
-        dsp_channel        = Optional(int)
-        stream_type        = Required(str, default="raw", py_check=lambda x: x in["raw", "demodulated", "integrated", "averaged"])
-        if_freq            = Required(float, default=0.0)
-        kernel             = Optional(str)
-        kernel_bias        = Required(float, default=0.0)
-        threshold          = Required(float, default=0.0)
-        threshold_invert   = Required(bool, default=False)
-        digitizer          = Optional(Digitizer)
+    receivers    = relationship("Receiver", backref="transceiver")
+    transmitters = relationship("Transmitter", backref="transceiver")
+    processors   = relationship("Processor", backref="transceiver")
+
+    def get_transmitter(self, name):
+        matches = [c for c in self.transmitters if c.label.endswith(name)]
+        if len(matches) == 0:
+            raise ValueException(f"Could not find a transmitter name on transceiver {self.label} ending with {name}")
+        elif len(matches) > 1:
+            raise ValueException(f"Found {len(matches)} matches for transmitter on transceiver {self.label} whose names end with {name}")
+        else:
+            return matches[0]
+    def get_recevier(self, name):
+        matches = [c for c in self.receviers if c.label.endswith(name)]
+        if len(matches) == 0:
+            raise ValueException(f"Could not find a recevier name on transceiver {self.label} ending with {name}")
+        elif len(matches) > 1:
+            raise ValueException(f"Found {len(matches)} matches for recevier on transceiver {self.label} whose names end with {name}")
+        else:
+            return matches[0]
+
+class Channel(session.Base):
+    '''
+    Every channel has a label and some printers.
+    '''
+    __tablename__ = "channel"
+    id            = Column(Integer, primary_key=True)
+    type          = Column(String(50))
+    label         = Column(String, nullable=False)
+    channel_db_id = Column(Integer, ForeignKey('channeldatabase.id'))
+
+    __mapper_args__ = {
+        'polymorphic_identity':'channel',
+        'polymorphic_on':type
+    }
+
+class ChannelMixin(object):
+    @declared_attr
+    def id(cls):
+        return Column(Integer, ForeignKey("channel.id"), primary_key=True)
+    @declared_attr
+    def __mapper_args__(cls):
+        return {'polymorphic_identity': cls.__name__.lower()}
+    @declared_attr
+    def __tablename__(cls):
+        return cls.__name__.lower()
+    def __repr__(self):
+        return str(self)
+    def __str__(self):
+        return f"{self.__class__.__name__}('{self.label}')"
+
+class PhysicalChannel(ChannelMixin, Channel):
+    '''
+    The main class for actual Transmitter channels.
+    '''
+    instrument      = Column(String) # i.e. the Transmitter or receiver
+    translator      = Column(String)
+    sampling_rate   = Column(Float, default=1.2e9, nullable=False)
+    delay           = Column(Float, default=0.0, nullable=False)
+
+    generator_id    = Column(Integer, ForeignKey("generator.id"))
+    generator       = relationship("Generator", back_populates="phys_chans")
+
+    logical_chan_id = Column(Integer, ForeignKey("logicalchannel.id"))
+    
+    transmitter_id  = Column(Integer, ForeignKey("transmitter.id"))
+    transmitter     = relationship("Transmitter", back_populates="channels")
+
+    def q(self):
+        if isinstance(self.logical_channel, Qubit):
+            return self.logical_channel
+
+class LogicalChannel(ChannelMixin, Channel):
+    '''
+    The main class from which we will generate sequences.
+    At some point it needs to be assigned to a physical channel.
+        frequency: modulation frequency of the channel (can be positive or negative)
+    '''
+    frequency    = Column(Float, default=0.0, nullable=False)
+    pulse_params = Column(MutableDict.as_mutable(PickleType), default={})
+
+    phys_chan = relationship("PhysicalChannel", uselist=False, backref="logical_chan", 
+                                   foreign_keys="[PhysicalChannel.logical_chan_id]")
+
+class PhysicalMarkerChannel(PhysicalChannel, ChannelMixin):
+    '''
+    A digital output channel on an Transmitter.
+        gate_buffer: How much extra time should be added onto the beginning of a gating pulse
+        gate_min_width: The minimum marker pulse width
+    '''
+    id = Column(Integer, ForeignKey("physicalchannel.id"), primary_key=True)
+
+    gate_buffer    = Column(Float, default=0.0, nullable=False)
+    gate_min_width = Column(Float, default=0.0, nullable=False)
+
+class PhysicalQuadratureChannel(PhysicalChannel, ChannelMixin):
+    '''
+    Something used to implement a standard qubit channel with two analog channels and a microwave gating channel.
+    '''
+    id = Column(Integer, ForeignKey("physicalchannel.id"), primary_key=True)
+
+    amp_factor           = Column(Float, default=1.0, nullable=False)
+    phase_skew           = Column(Float, default=0.0, nullable=False)
+    I_channel_offset     = Column(Float, default=0.0, nullable=False)
+    Q_channel_offset     = Column(Float, default=0.0, nullable=False)
+    I_channel_amp_factor = Column(Float, default=1.0, nullable=False)
+    Q_channel_amp_factor = Column(Float, default=1.0, nullable=False)
+
+class ReceiverChannel(PhysicalChannel, ChannelMixin):
+    '''
+    A trigger input on a receiver.
+    '''
+    id = Column(Integer, ForeignKey("physicalchannel.id"), primary_key=True)
+
+    channel            = Column(Integer, nullable=False)
+    dsp_channel        = Column(Integer)
+    stream_type        = Column(String, default="raw", nullable=False)
+    if_freq            = Column(Float, default=0.0, nullable=False)
+    kernel             = Column(LargeBinary) # Float64 byte representation of kernel
+    kernel_bias        = Column(Float, default=0.0, nullable=False)
+    threshold          = Column(Float, default=0.0, nullable=False)
+    threshold_invert   = Column(Boolean, default=False, nullable=False)
+
+    receiver_id        = Column(Integer, ForeignKey("receiver.id"))
+    receiver           = relationship("Receiver", back_populates="channels")
+
+    triggering_chan_id = Column(Integer, ForeignKey("measurement.id"))
 
     def pulse_check(name):
         return name in ["constant", "gaussian", "drag", "gaussOn", "gaussOff", "dragGaussOn", "dragGaussOff",
                        "tanh", "exp_decay", "autodyne", "arb_axis_drag"]
 
-    class LogicalMarkerChannel(LogicalChannel):
-        '''
-        A class for digital channels for gating sources or triggering other things.
-        '''
-        meas_channel = Optional(LogicalChannel)
-        trig_channel = Optional("Measurement")
+    @validates('stream_type')
+    def validate_stream_type(self, key, source):
+        assert source in ["raw", "demodulated", "integrated", "averaged"]
+        return source
 
-        def __init__(self, **kwargs):
-            if "pulse_params" not in kwargs.keys():
-                kwargs["pulse_params"] =  {'shape_fun': "constant",'length': 10e-9}
-            super(LogicalMarkerChannel, self).__init__(**kwargs)
+class LogicalMarkerChannel(LogicalChannel, ChannelMixin):
+    '''
+    A class for digital channels for gating sources or triggering other things.
+    '''
+    id = Column(Integer, ForeignKey("logicalchannel.id"), primary_key=True)
+    
+    meas_chan_id = Column(Integer, ForeignKey("measurement.id"))
+    meas_gate_id = Column(Integer, ForeignKey("measurement.id"))
 
-    class Qubit(LogicalChannel):
-        '''
-        The main class for generating qubit pulses.  Effectively a logical "QuadratureChannel".
-            frequency: modulation frequency of the channel (can be positive or negative)
-        '''
-        edge_source = Optional("Edge", reverse="source")
-        edge_target = Optional("Edge", reverse="target")
+    def __init__(self, **kwargs):
+        if "pulse_params" not in kwargs.keys():
+            kwargs["pulse_params"] =  {'shape_fun': "constant",'length': 10e-9}
+        super(LogicalMarkerChannel, self).__init__(**kwargs)
 
-        def __init__(self, **kwargs):
-            if "pulse_params" not in kwargs.keys():
-                kwargs["pulse_params"] =  {'length': 20e-9,
-                                'piAmp': 1.0,
-                                'pi2Amp': 0.5,
-                                'shape_fun': "gaussian",
+class Qubit(LogicalChannel, ChannelMixin):
+    '''
+    The main class for generating qubit pulses.  Effectively a logical "QuadratureChannel".
+        frequency: modulation frequency of the channel (can be positive or negative)
+    '''
+    id = Column(Integer, ForeignKey("logicalchannel.id"), primary_key=True)
+
+    edge_source  = relationship("Edge", backref="source", foreign_keys="[Edge.source_id]")
+    edge_target  = relationship("Edge", backref="target", foreign_keys="[Edge.target_id]")
+    measure_chan = relationship("Measurement", uselist=False, backref="control_chan", foreign_keys="[Measurement.control_chan_id]")
+
+    def __init__(self, **kwargs):
+        if "pulse_params" not in kwargs.keys():
+            kwargs["pulse_params"] =  {'length': 20e-9,
+                            'piAmp': 1.0,
+                            'pi2Amp': 0.5,
+                            'shape_fun': "gaussian",
+                            'cutoff': 2,
+                            'drag_scaling': 0,
+                            'sigma': 5e-9}
+        super(Qubit, self).__init__(**kwargs)
+
+class Measurement(LogicalChannel, ChannelMixin):
+    '''
+    A class for measurement channels.
+    Measurements are special because they can be different types:
+    autodyne which needs an IQ pair or hetero/homodyne which needs just a marker channel.
+        meas_type: Type of measurement (autodyne, homodyne)
+        autodyne_freq: use to bake the modulation into the pulse, so that it has constant phase
+        frequency: use to asssociate modulation with the channel
+    '''
+    id = Column(Integer, ForeignKey("logicalchannel.id"), primary_key=True)
+
+    meas_type     = Column(String, default='autodyne', nullable=False)
+    autodyne_freq = Column(Float, default=0.0, nullable=False)
+
+    control_chan_id = Column(Integer, ForeignKey("qubit.id"))
+
+    trig_chan     = relationship("LogicalMarkerChannel", uselist=False, backref="meas_chan", foreign_keys="[LogicalMarkerChannel.meas_chan_id]")
+    gate_chan     = relationship("LogicalMarkerChannel", uselist=False, backref="trig_meas", foreign_keys="[LogicalMarkerChannel.meas_gate_id]")
+    receiver_chan = relationship("ReceiverChannel", uselist=False, backref="triggering_chan", foreign_keys="[ReceiverChannel.triggering_chan_id]")
+
+    @validates('meas_type')
+    def validate_meas_type(self, key, source):
+        assert source in ['autodyne', 'homodyne']
+        return source
+    
+    def __init__(self, **kwargs):
+        if "pulse_params" not in kwargs.keys():
+            kwargs["pulse_params"] =  {'length': 500e-9,
+                                'amp': 1.0,
+                                'shape_fun': "tanh",
                                 'cutoff': 2,
-                                'drag_scaling': 0,
-                                'sigma': 5e-9}
-            super(Qubit, self).__init__(**kwargs)
+                                'sigma': 1e-9}
+        super(Measurement, self).__init__(**kwargs)
 
-    class Measurement(LogicalChannel):
-        '''
-        A class for measurement channels.
-        Measurements are special because they can be different types:
-        autodyne which needs an IQ pair or hetero/homodyne which needs just a marker channel.
-            meas_type: Type of measurement (autodyne, homodyne)
-            autodyne_freq: use to bake the modulation into the pulse, so that it has constant phase
-            frequency: use to asssociate modulation with the channel
-        '''
-        meas_type     = Required(str, default='autodyne', py_check=lambda x: x in ['autodyne', 'homodyne'])
-        autodyne_freq = Required(float, default=0.0)
-        trig_chan     = Optional(LogicalMarkerChannel)
+class Edge(LogicalChannel, ChannelMixin):
+    '''
+    Defines an arc/directed edge between qubit vertices. If a device supports bi-directional
+    connectivity, that is represented with two independent Edges.
 
-        def __init__(self, **kwargs):
-            if "pulse_params" not in kwargs.keys():
-                kwargs["pulse_params"] =  {'length': 100e-9,
-                                    'amp': 1.0,
-                                    'shape_fun': "tanh",
-                                    'cutoff': 2,
-                                    'sigma': 1e-9}
-            super(Measurement, self).__init__(**kwargs)
+    An Edge is also effectively an abstract channel, so it carries the same properties as a
+    Qubit channel.
+    '''
+    id = Column(Integer, ForeignKey("logicalchannel.id"), primary_key=True)
 
-    class Edge(LogicalChannel):
-        '''
-        Defines an arc/directed edge between qubit vertices. If a device supports bi-directional
-        connectivity, that is represented with two independent Edges.
+    source_id = Column(Integer, ForeignKey("qubit.id"))
+    target_id = Column(Integer, ForeignKey("qubit.id"))
 
-        An Edge is also effectively an abstract channel, so it carries the same properties as a
-        Qubit channel.
-        '''
-        # allow string in source and target so that we can store a label or an object
-        source = Required(Qubit)
-        target = Required(Qubit)
+    def __init__(self, **kwargs):
+        if "pulse_params" not in kwargs.keys():
+            kwargs["pulse_params"] =   {'length': 20e-9,
+                                        'amp': 1.0,
+                                        'phase': 0.0,
+                                        'shape_fun': "gaussian",
+                                        'cutoff': 2,
+                                        'drag_scaling': 0,
+                                        'sigma': 5e-9,
+                                        'riseFall': 20e-9}
+        super(Edge, self).__init__(**kwargs)
 
-        def __init__(self, **kwargs):
-            if "pulse_params" not in kwargs.keys():
-                kwargs["pulse_params"] =   {'length': 20e-9,
-                                            'amp': 1.0,
-                                            'phase': 0.0,
-                                            'shape_fun': "gaussian",
-                                            'cutoff': 2,
-                                            'drag_scaling': 0,
-                                            'sigma': 5e-9,
-                                            'riseFall': 20e-9}
-            super(Edge, self).__init__(**kwargs)
+# if __name__ == '__main__':
+    
+    # from sqlalchemy import create_engine
+    # engine = create_engine('sqlite:///:memory:', echo=True)
+    # session.Base.metadata.create_all(engine)
+    # Session.configure(bind=engine)
+    # session = Session()
 
-    globals()["Channel"] = Channel
-    globals()["PhysicalChannel"] = PhysicalChannel
-    globals()["LogicalChannel"] = LogicalChannel
-    globals()["PhysicalQuadratureChannel"] = PhysicalQuadratureChannel
-    globals()["PhysicalMarkerChannel"] = PhysicalMarkerChannel
-    globals()["LogicalMarkerChannel"] = LogicalMarkerChannel
-    globals()["ReceiverChannel"] = ReceiverChannel
-    globals()["Measurement"] = Measurement
-    globals()["Qubit"] = Qubit
-    globals()["Edge"] = Edge
-    globals()["MicrowaveSource"] = MicrowaveSource
-    globals()["ChannelDatabase"] = ChannelDatabase
-    globals()["Digitizer"] = Digitizer
-    globals()["AWG"] = AWG
+    # q1 = Qubit(label="q1")
+    # q2 = Qubit(label="q2")
+    # e1 = Edge(label="e1", source=q1, target=q2)
+    # session.add_all([q1,q2,e1])
+
+    # b = ChannelDatabase(label="working2")
+    # s = Generator(label="Src1", model="abc", power=10.0, frequency=5.0e9)
+    # b.sources.append(s)
+    # session.add_all([b,s])
+    # session.new
+    # session.commit()
+
+
+
+
+
