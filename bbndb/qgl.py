@@ -345,9 +345,8 @@ class Qubit(LogicalChannel, ChannelMixin):
     '''
     id = Column(Integer, ForeignKey("logicalchannel.id"), primary_key=True)
 
-    edge_source_id = Column(Integer, ForeignKey("edge.id"))
-    edge_target_id = Column(Integer, ForeignKey("edge.id"))
-
+    edge_source  = relationship("Edge", backref="source", foreign_keys="[Edge.source_id]")
+    edge_target  = relationship("Edge", backref="target", foreign_keys="[Edge.target_id]")
     measure_chan = relationship("Measurement", uselist=False, backref="control_chan", foreign_keys="[Measurement.control_chan_id]")
 
     def __init__(self, **kwargs):
@@ -405,8 +404,8 @@ class Edge(LogicalChannel, ChannelMixin):
     '''
     id = Column(Integer, ForeignKey("logicalchannel.id"), primary_key=True)
 
-    source = relationship("Qubit", uselist=False, backref="edge_source", foreign_keys="[Qubit.edge_source_id]")
-    target = relationship("Qubit", uselist=False, backref="edge_target", foreign_keys="[Qubit.edge_target_id]")
+    source_id = Column(Integer, ForeignKey("qubit.id"))
+    target_id = Column(Integer, ForeignKey("qubit.id"))
 
     def __init__(self, **kwargs):
         if "pulse_params" not in kwargs.keys():
