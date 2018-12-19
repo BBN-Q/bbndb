@@ -128,11 +128,13 @@ class Receiver(DatabaseItem, session.Base):
         assert source in ['external', 'internal']
         return source
     def get_chan(self, name):
+        if isinstance(name, int):
+            name = f"-{name}"
         matches = [c for c in self.channels if c.label.endswith(name)]
         if len(matches) == 0:
-            raise ValueException(f"Could not find a channel name on receiver {self.label} ending with {name}")
+            raise ValueError(f"Could not find a channel name on receiver {self.label} ending with {name}")
         elif len(matches) > 1:
-            raise ValueException(f"Found {len(matches)} matches for channels on receiver {self.label} whose names end with {name}")
+            raise ValueError(f"Found {len(matches)} matches for channels on receiver {self.label} whose names end with {name}")
         else:
             return matches[0]
     def ch(self, name):
@@ -158,11 +160,13 @@ class Transmitter(DatabaseItem, session.Base):
         assert source in ['external', 'internal']
         return source
     def get_chan(self, name):
+        if isinstance(name, int):
+            name = f"-{name}"
         matches = [c for c in self.channels if c.label.endswith(name)]
         if len(matches) == 0:
-            raise ValueException(f"Could not find a channel name on transmitter {self.label} ending with {name}")
+            raise ValueError(f"Could not find a channel name on transmitter {self.label} ending with {name}")
         elif len(matches) > 1:
-            raise ValueException(f"Found {len(matches)} matches for channels on transmitter {self.label} whose names end with {name}")
+            raise ValueError(f"Found {len(matches)} matches for channels on transmitter {self.label} whose names end with {name}")
         else:
             return matches[0]
     def ch(self, name):
@@ -191,20 +195,30 @@ class Transceiver(DatabaseItem, session.Base):
     transmitters = relationship("Transmitter", backref="transceiver")
     processors   = relationship("Processor", backref="transceiver")
 
+    def tx(self, name):
+        return self.get_transmitter(name)
+
+    def rx(self, name):
+        return self.get_recevier(name)
+
     def get_transmitter(self, name):
+        if isinstance(name, int):
+            name = f"_U{name}"
         matches = [c for c in self.transmitters if c.label.endswith(name)]
         if len(matches) == 0:
-            raise ValueException(f"Could not find a transmitter name on transceiver {self.label} ending with {name}")
+            raise ValueError(f"Could not find a transmitter name on transceiver {self.label} ending with {name}")
         elif len(matches) > 1:
-            raise ValueException(f"Found {len(matches)} matches for transmitter on transceiver {self.label} whose names end with {name}")
+            raise ValueError(f"Found {len(matches)} matches for transmitter on transceiver {self.label} whose names end with {name}")
         else:
             return matches[0]
     def get_recevier(self, name):
+        if isinstance(name, int):
+            name = f"_U{name}"
         matches = [c for c in self.receviers if c.label.endswith(name)]
         if len(matches) == 0:
-            raise ValueException(f"Could not find a recevier name on transceiver {self.label} ending with {name}")
+            raise ValueError(f"Could not find a recevier name on transceiver {self.label} ending with {name}")
         elif len(matches) > 1:
-            raise ValueException(f"Found {len(matches)} matches for recevier on transceiver {self.label} whose names end with {name}")
+            raise ValueError(f"Found {len(matches)} matches for recevier on transceiver {self.label} whose names end with {name}")
         else:
             return matches[0]
 
