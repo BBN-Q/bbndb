@@ -61,8 +61,9 @@ class DatabaseItem(object):
     def channel_db_id(cls):
         return Column(Integer, ForeignKey('channeldatabase.id'))
 
-    id    = Column(Integer, primary_key=True)
-    label = Column(String, nullable=False)
+    id         = Column(Integer, primary_key=True)
+    label      = Column(String, nullable=False)
+    standalone = Column(Boolean, nullable=False, default=False)
 
     def __repr__(self):
         return str(self)
@@ -85,6 +86,9 @@ class ChannelDatabase(session.Base):
     processors   = relationship("Processor", backref="channel_db", cascade="all, delete, delete-orphan")
     attenuators  = relationship("Attenuator", backref="channel_db", cascade="all, delete, delete-orphan")
     
+    def all_instruments(self):
+        return self.generators + self.transmitters + self.receivers + self.transceivers + self.instruments + self.processors + self.attenuators
+
     def __repr__(self):
         return str(self)
     def __str__(self):
