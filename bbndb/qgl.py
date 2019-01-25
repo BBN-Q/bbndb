@@ -85,7 +85,7 @@ class ChannelDatabase(session.Base):
     instruments  = relationship("Instrument", backref="channel_db", cascade="all, delete, delete-orphan")
     processors   = relationship("Processor", backref="channel_db", cascade="all, delete, delete-orphan")
     attenuators  = relationship("Attenuator", backref="channel_db", cascade="all, delete, delete-orphan")
-    
+
     def all_instruments(self):
         return self.generators + self.transmitters + self.receivers + self.transceivers + self.instruments + self.processors + self.attenuators
 
@@ -93,6 +93,8 @@ class ChannelDatabase(session.Base):
         return str(self)
     def __str__(self):
         return f"ChannelDatabase(id={self.id}, label={self.label})"
+    def all_instruments(self):
+        return self.generators + self.transmitters + self.receivers + self.transceivers + self.instruments + self.processors
 
 class Instrument(DatabaseItem, session.Base):
     model      = Column(String, nullable=False)
@@ -126,8 +128,10 @@ class Generator(DatabaseItem, session.Base):
     power            = Column(Float, nullable=False)
     frequency        = Column(Float, nullable=False)
 
+    reference        = Column(String)
+
     phys_chans = relationship("PhysicalChannel", back_populates="generator")
-    
+
 class Receiver(DatabaseItem, session.Base):
     """A receiver , or generally an analog to digitial converter"""
     model            = Column(String, nullable=False)
@@ -141,6 +145,7 @@ class Receiver(DatabaseItem, session.Base):
     number_averages  = Column(Integer, default=100) # This should be automati, nullable=Falsec
     transceiver_id   = Column(Integer, ForeignKey("transceiver.id"))
     acquire_mode     = Column(String, default="digitizer", nullable=False)
+    reference        = Column(String, default="external")
 
     channels = relationship("ReceiverChannel", back_populates="receiver", cascade="all, delete, delete-orphan")
 
@@ -148,11 +153,17 @@ class Receiver(DatabaseItem, session.Base):
     def validate_acquire_mode(self, key, source):
         assert source in ['digitizer', 'averager']
         return source
-    
+
+    @validates('reference')
+    def validate_reference(self, key, source):
+        assert source in ['external', 'internal']
+        return source
+
     @validates('trigger_source')
     def validate_trigger_source(self, key, source):
         assert source in ['external', 'internal']
         return source
+
     def get_chan(self, name):
         if isinstance(name, int):
             name = f"-{name}"
@@ -178,12 +189,12 @@ class Transmitter(DatabaseItem, session.Base):
     master           = Column(Boolean, default=False, nullable=False)
     sequence_file    = Column(String)
     transceiver_id   = Column(Integer, ForeignKey("transceiver.id"))
-    
+
     channels = relationship("PhysicalChannel", back_populates="transmitter", cascade="all, delete, delete-orphan")
 
     @validates('trigger_source')
     def validate_trigger_source(self, key, source):
-        assert source in ['external', 'internal']
+        assert source in ['external', 'internal', 'system']
         return source
     def get_chan(self, name):
         if isinstance(name, int):
@@ -208,9 +219,12 @@ class Transmitter(DatabaseItem, session.Base):
 
 class Processor(DatabaseItem, session.Base):
     """A hardware unit used for signal processing, e.g. a TDM"""
-    model          = Column(String, nullable=False)
-    address        = Column(String)
-    transceiver_id = Column(Integer, ForeignKey("transceiver.id"))
+    model            = Column(String, nullable=False)
+    address          = Column(String)
+    transceiver_id   = Column(Integer, ForeignKey("transceiver.id"))
+    master           = Column(Boolean, default=False, nullable=False)
+    trigger_interval = Column(Float, default=100e-6, nullable=False)
+    trigger_source   = Column(String, default="internal", nullable=False)
 
 class Transceiver(DatabaseItem, session.Base):
     """A single machine or rack of a2ds and d2as that we want to treat as a unit."""
@@ -222,29 +236,22 @@ class Transceiver(DatabaseItem, session.Base):
     processors   = relationship("Processor", backref="transceiver")
 
     def tx(self, name):
-        return self.get_transmitter(name)
+        return self.get_thing("transmitters", name)
 
     def rx(self, name):
-        return self.get_recevier(name)
+        return self.get_thing("receviers", name)
 
-    def get_transmitter(self, name):
+    def px(self, name):
+        return self.get_thing("processors", name)
+
+    def get_thing(self, thing_type, name):
         if isinstance(name, int):
             name = f"_U{name}"
-        matches = [c for c in self.transmitters if c.label.endswith(name)]
+        matches = [c for c in getattr(self, thing_type) if c.label.endswith(name)]
         if len(matches) == 0:
-            raise ValueError(f"Could not find a transmitter name on transceiver {self.label} ending with {name}")
+            raise ValueError(f"Could not find a {thing_type} name on transceiver {self.label} ending with {name}")
         elif len(matches) > 1:
-            raise ValueError(f"Found {len(matches)} matches for transmitter on transceiver {self.label} whose names end with {name}")
-        else:
-            return matches[0]
-    def get_recevier(self, name):
-        if isinstance(name, int):
-            name = f"_U{name}"
-        matches = [c for c in self.receviers if c.label.endswith(name)]
-        if len(matches) == 0:
-            raise ValueError(f"Could not find a recevier name on transceiver {self.label} ending with {name}")
-        elif len(matches) > 1:
-            raise ValueError(f"Found {len(matches)} matches for recevier on transceiver {self.label} whose names end with {name}")
+            raise ValueError(f"Found {len(matches)} matches for {thing_type} on transceiver {self.label} whose names end with {name}")
         else:
             return matches[0]
 
@@ -290,8 +297,9 @@ class PhysicalChannel(ChannelMixin, Channel):
     generator_id    = Column(Integer, ForeignKey("generator.id"))
     generator       = relationship("Generator", back_populates="phys_chans")
 
-    logical_chan_id = Column(Integer, ForeignKey("logicalchannel.id"))
-    
+    phys_chan       = relationship("LogicalChannel", backref="physical_chan",
+                                   foreign_keys="[LogicalChannel.physical_chan_id]")
+
     transmitter_id  = Column(Integer, ForeignKey("transmitter.id"))
     transmitter     = relationship("Transmitter", back_populates="channels")
 
@@ -308,8 +316,7 @@ class LogicalChannel(ChannelMixin, Channel):
     frequency    = Column(Float, default=0.0, nullable=False)
     pulse_params = Column(MutableDict.as_mutable(PickleType), default={})
 
-    phys_chan = relationship("PhysicalChannel", uselist=False, backref="logical_chan", 
-                                   foreign_keys="[PhysicalChannel.logical_chan_id]")
+    physical_chan_id = Column(Integer, ForeignKey("physicalchannel.id"))
 
 class PhysicalMarkerChannel(PhysicalChannel, ChannelMixin):
     '''
@@ -380,7 +387,7 @@ class LogicalMarkerChannel(LogicalChannel, ChannelMixin):
     A class for digital channels for gating sources or triggering other things.
     '''
     id = Column(Integer, ForeignKey("logicalchannel.id"), primary_key=True)
-    
+
     meas_chan_id = Column(Integer, ForeignKey("measurement.id"))
     meas_gate_id = Column(Integer, ForeignKey("measurement.id"))
 
@@ -436,7 +443,7 @@ class Measurement(LogicalChannel, ChannelMixin):
     def validate_meas_type(self, key, source):
         assert source in ['autodyne', 'homodyne']
         return source
-    
+
     def __init__(self, **kwargs):
         if "pulse_params" not in kwargs.keys():
             kwargs["pulse_params"] =  {'length': 500e-9,
@@ -472,7 +479,7 @@ class Edge(LogicalChannel, ChannelMixin):
         super(Edge, self).__init__(**kwargs)
 
 # if __name__ == '__main__':
-    
+
     # from sqlalchemy import create_engine
     # engine = create_engine('sqlite:///:memory:', echo=True)
     # session.Base.metadata.create_all(engine)
@@ -490,8 +497,3 @@ class Edge(LogicalChannel, ChannelMixin):
     # session.add_all([b,s])
     # session.new
     # session.commit()
-
-
-
-
-
