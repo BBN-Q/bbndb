@@ -83,6 +83,7 @@ class ChannelDatabase(session.Base):
     transceivers = relationship("Transceiver", backref="channel_db", cascade="all, delete, delete-orphan")
     instruments  = relationship("Instrument", backref="channel_db", cascade="all, delete, delete-orphan")
     processors   = relationship("Processor", backref="channel_db", cascade="all, delete, delete-orphan")
+    attenuators  = relationship("Attenuator", backref="channel_db", cascade="all, delete, delete-orphan")
     
     def __repr__(self):
         return str(self)
@@ -93,7 +94,28 @@ class Instrument(DatabaseItem, session.Base):
     model      = Column(String, nullable=False)
     address    = Column(String)
     parameters = Column(MutableDict.as_mutable(PickleType), default={}, nullable=False)
-    
+
+class Attenuator(DatabaseItem, session.Base):
+    model    = Column(String, nullable=False)
+    address  = Column(String)
+
+    channels = relationship("AttenuatorChannel", back_populates="attenuator", cascade="all, delete, delete-orphan")
+
+    def get_chan(self, name):
+        if isinstance(name, int):
+            name = f"-{name}"
+        matches = [c for c in self.channels if c.label.endswith(name)]
+        if len(matches) == 0:
+            raise ValueError(f"Could not find a channel name on attenuator {self.label} ending with {name}")
+        elif len(matches) > 1:
+            raise ValueError(f"Found {len(matches)} matches for channels on attenuator {self.label} whose names end with {name}")
+        else:
+            return matches[0]
+    def ch(self, name):
+        return self.get_chan(name)
+    def __getitem__(self, value):
+        return self.get_chan(value)
+
 class Generator(DatabaseItem, session.Base):
     model            = Column(String, nullable=False)
     address          = Column(String)
@@ -309,6 +331,17 @@ class PhysicalQuadratureChannel(PhysicalChannel, ChannelMixin):
     I_channel_amp_factor = Column(Float, default=1.0, nullable=False)
     Q_channel_amp_factor = Column(Float, default=1.0, nullable=False)
 
+class AttenuatorChannel(PhysicalChannel, ChannelMixin):
+    """
+    Physical Channel on an Attenutator
+    """
+    id          = Column(Integer, ForeignKey("physicalchannel.id"), primary_key=True)
+    channel     = Column(Integer, nullable=False)
+    attenuation = Column(Float, default=0.0, nullable=False)
+
+    attenuator_id = Column(Integer, ForeignKey("attenuator.id"))
+    attenuator    = relationship("Attenuator", back_populates="channels")
+
 class ReceiverChannel(PhysicalChannel, ChannelMixin):
     '''
     A trigger input on a receiver.
@@ -390,9 +423,10 @@ class Measurement(LogicalChannel, ChannelMixin):
 
     control_chan_id = Column(Integer, ForeignKey("qubit.id"))
 
-    trig_chan     = relationship("LogicalMarkerChannel", uselist=False, backref="meas_chan", foreign_keys="[LogicalMarkerChannel.meas_chan_id]")
-    gate_chan     = relationship("LogicalMarkerChannel", uselist=False, backref="trig_meas", foreign_keys="[LogicalMarkerChannel.meas_gate_id]")
-    receiver_chan = relationship("ReceiverChannel", uselist=False, backref="triggering_chan", foreign_keys="[ReceiverChannel.triggering_chan_id]")
+    trig_chan       = relationship("LogicalMarkerChannel", uselist=False, backref="meas_chan", foreign_keys="[LogicalMarkerChannel.meas_chan_id]")
+    gate_chan       = relationship("LogicalMarkerChannel", uselist=False, backref="trig_meas", foreign_keys="[LogicalMarkerChannel.meas_gate_id]")
+    receiver_chan   = relationship("ReceiverChannel", uselist=False, backref="triggering_chan", foreign_keys="[ReceiverChannel.triggering_chan_id]")
+    # attenuator_chan = relationship("AttenuatorChannel", uselist=False, backref="measuring_chan", foreign_keys="[AttenuatorChannel.measuring_chan_id]")
 
     @validates('meas_type')
     def validate_meas_type(self, key, source):
