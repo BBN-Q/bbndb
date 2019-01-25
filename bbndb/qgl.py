@@ -297,8 +297,8 @@ class PhysicalChannel(ChannelMixin, Channel):
     generator_id    = Column(Integer, ForeignKey("generator.id"))
     generator       = relationship("Generator", back_populates="phys_chans")
 
-    phys_chan       = relationship("LogicalChannel", backref="physical_chan",
-                                   foreign_keys="[LogicalChannel.physical_chan_id]")
+    log_chan    = relationship("LogicalChannel", backref="phys_chan",
+                                   foreign_keys="[LogicalChannel.phys_chan_id]")
 
     transmitter_id  = Column(Integer, ForeignKey("transmitter.id"))
     transmitter     = relationship("Transmitter", back_populates="channels")
@@ -316,7 +316,7 @@ class LogicalChannel(ChannelMixin, Channel):
     frequency    = Column(Float, default=0.0, nullable=False)
     pulse_params = Column(MutableDict.as_mutable(PickleType), default={})
 
-    physical_chan_id = Column(Integer, ForeignKey("physicalchannel.id"))
+    phys_chan_id = Column(Integer, ForeignKey("physicalchannel.id"))
 
 class PhysicalMarkerChannel(PhysicalChannel, ChannelMixin):
     '''
@@ -478,6 +478,16 @@ class Edge(LogicalChannel, ChannelMixin):
                                         'riseFall': 20e-9}
         super(Edge, self).__init__(**kwargs)
 
+    def isforward(self, source, target):
+        ''' Test whether (source, target) matches the directionality of the edge. '''
+        nodes = (self.source, self.target)
+        if (source not in nodes) or (target not in nodes):
+            raise ValueError('One of {0} is not a node in the edge'.format((
+                source, target)))
+        if (self.source, self.target) == (source, target):
+            return True
+        else:
+            return False
 # if __name__ == '__main__':
 
     # from sqlalchemy import create_engine
