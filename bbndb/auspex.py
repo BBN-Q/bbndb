@@ -209,6 +209,11 @@ class Buffer(OutputProxy, NodeMixin):
     id = Column(Integer, ForeignKey("outputproxy.id"), primary_key=True)
     max_size = Column(Integer)
 
+    def __init__(self, **kwargs):
+        if "groupname" in kwargs:
+            kwargs.pop("groupname")
+            super(Buffer, self).__init__(**kwargs)
+
 class QubitProxy(NodeMixin, NodeProxy):
     """docstring for FilterProxy"""
     id = Column(Integer, ForeignKey("nodeproxy.id"), primary_key=True)
@@ -250,17 +255,27 @@ class QubitProxy(NodeMixin, NodeProxy):
             # n.exp = None
             self.pipelineMgr.session.expunge(n)
         self.pipelineMgr.meas_graph.remove_nodes_from(desc)
-        
-    def create_default_pipeline(self, buffers=False):
+
+    def create_default_pipeline(self, average=True, buffers=False):
         Output = Buffer if buffers else Write
-        if self.stream_type.lower() == "raw":
-            self.add(Demodulate()).add(Integrate()).add(Average()).add(Output())
-        if self.stream_type.lower() == "demodulated":
-            self.add(Integrate()).add(Average()).add(Output())
-        if self.stream_type.lower() == "integrated":
-            self.add(Average()).add(Output())
-        if self.stream_type.lower() == "averaged":
-            self.add(Output())
+        if average:
+            if self.stream_type.lower() == "raw":
+                self.add(Demodulate()).add(Integrate()).add(Average()).add(Output(groupname=self.qubit_name+'-main'))
+            if self.stream_type.lower() == "demodulated":
+                self.add(Integrate()).add(Average()).add(Output(groupname=self.qubit_name+'-main'))
+            if self.stream_type.lower() == "integrated":
+                self.add(Average()).add(Output(groupname=self.qubit_name+'-main'))
+            if self.stream_type.lower() == "averaged":
+                self.add(Output(groupname=self.qubit_name+'-main'))
+        else:
+            if self.stream_type.lower() == "raw":
+                self.add(Demodulate()).add(Integrate()).add(Output(groupname=self.qubit_name+'-main'))
+            if self.stream_type.lower() == "demodulated":
+                self.add(Integrate()).add(Output(groupname=self.qubit_name+'-main'))
+            if self.stream_type.lower() == "integrated":
+                self.add(Output(groupname=self.qubit_name+'-main'))
+            if self.stream_type.lower() == "averaged":
+                raise Exception("Cannot have averaged stream without averaging?!")
 
     def show_pipeline(self):
         desc = list(nx.algorithms.dag.descendants(self.pipelineMgr.meas_graph, self)) + [self]
