@@ -16,6 +16,8 @@ class Connection(session.Base):
     id            = Column(Integer, primary_key=True)
     node1_id      = Column(Integer, ForeignKey("nodeproxy.id"))
     node2_id      = Column(Integer, ForeignKey("nodeproxy.id"))
+    node1_name    = Column(String, nullable=False, default="source")
+    node2_name    = Column(String, nullable=False, default="sink")
     pipeline_name = Column(String, nullable=False)
     time          = Column(DateTime)
 
@@ -68,7 +70,7 @@ class FilterProxy(NodeMixin, NodeProxy):
         super(FilterProxy, self).__init__(**kwargs)
         self.pipelineMgr = __current_pipeline__
 
-    def add(self, filter_obj):
+    def add(self, filter_obj, connector_out="source", connector_in="sink"):
         # if not self.pipeline:
         #     raise Exception("This filter does not correspond to any experiment. Please file a bug report.")
         if not self.pipelineMgr:
@@ -77,7 +79,7 @@ class FilterProxy(NodeMixin, NodeProxy):
         filter_obj.pipelineMgr = self.pipelineMgr
         filter_obj.qubit_name = self.qubit_name
 
-        self.pipelineMgr.meas_graph.add_edge(self, filter_obj)
+        self.pipelineMgr.meas_graph.add_edge(self, filter_obj, connector_in=connector_in, connector_out=connector_out)
         self.pipelineMgr.session.add(filter_obj)
         return filter_obj
 
@@ -152,8 +154,17 @@ class Average(FilterProxy, NodeMixin):
     """Takes data and collapses along the specified axis."""
     # Over which axis should averaging take place
     id = Column(Integer, ForeignKey("filterproxy.id"), primary_key=True)
-
     axis = Column(String, default="averages")
+
+class FidelityKernel(FilterProxy, NodeMixin):
+    """Calculates the single shot fidelity from given input"""
+    id                       = Column(Integer, ForeignKey("filterproxy.id"), primary_key=True)
+    save_kernel              = Column(Boolean, nullable=False, default=False)
+    optimal_integration_time = Column(Boolean, nullable=False, default=False)
+    set_threshold            = Column(Boolean, nullable=False, default=True)
+    zero_mean                = Column(Boolean, nullable=False, default=False)
+    logistic_regression      = Column(Boolean, nullable=False, default=False)
+    tolerance                = Column(Float, nullable=False, default=1.0e-3)
 
 class Integrate(FilterProxy, NodeMixin):
     id = Column(Integer, ForeignKey("filterproxy.id"), primary_key=True)
@@ -212,7 +223,7 @@ class Buffer(OutputProxy, NodeMixin):
     def __init__(self, **kwargs):
         if "groupname" in kwargs:
             kwargs.pop("groupname")
-            super(Buffer, self).__init__(**kwargs)
+        super(Buffer, self).__init__(**kwargs)
 
 class QubitProxy(NodeMixin, NodeProxy):
     """docstring for FilterProxy"""
@@ -227,7 +238,7 @@ class QubitProxy(NodeMixin, NodeProxy):
         self.available_streams = None
         self.stream_type = None
 
-    def add(self, filter_obj):
+    def add(self, filter_obj, connector_out="source", connector_in="sink"):
         # if not self.pipeline:
         #     raise Exception("This qubit does not correspond to any experiment. Please file a bug report.")
         if not self.pipelineMgr:
@@ -236,7 +247,7 @@ class QubitProxy(NodeMixin, NodeProxy):
         filter_obj.qubit_name  = self.qubit_name
         filter_obj.pipelineMgr = self.pipelineMgr
         # filter_obj.exp         = self.pipeline
-        self.pipelineMgr.meas_graph.add_edge(self, filter_obj)
+        self.pipelineMgr.meas_graph.add_edge(self, filter_obj, connector_in=connector_in, connector_out=connector_out)
         self.pipelineMgr.session.add(filter_obj)
 
         return filter_obj
