@@ -127,10 +127,16 @@ class Generator(DatabaseItem, session.Base):
     address          = Column(String)
     power            = Column(Float, nullable=False)
     frequency        = Column(Float, nullable=False)
-
     reference        = Column(String)
 
+    spectrumanalyzer_id = Column(Integer, ForeignKey("spectrumanalyzer.id"))
+
     phys_chans = relationship("PhysicalChannel", back_populates="generator")
+
+class SpectrumAnalyzer(DatabaseItem, session.Base):
+    model     = Column(String, nullable=False)
+    address   = Column(String)
+    LO_source = relationship("Generator", uselist=False, foreign_keys="[Generator.spectrumanalyzer_id]")
 
 class Receiver(DatabaseItem, session.Base):
     """A receiver , or generally an analog to digitial converter"""
