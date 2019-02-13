@@ -153,7 +153,7 @@ class Receiver(DatabaseItem, session.Base):
     acquire_mode     = Column(String, default="digitizer", nullable=False)
     reference        = Column(String, default="external")
 
-    channels = relationship("ReceiverChannel", back_populates="receiver", cascade="all, delete, delete-orphan")
+    channels = relationship("PhysicalChannel", back_populates="receiver", cascade="all, delete, delete-orphan")
 
     @validates('acquire_mode')
     def validate_acquire_mode(self, key, source):
@@ -303,11 +303,14 @@ class PhysicalChannel(ChannelMixin, Channel):
     generator_id    = Column(Integer, ForeignKey("generator.id"))
     generator       = relationship("Generator", back_populates="phys_chans")
 
-    log_chan    = relationship("LogicalChannel", backref="phys_chan",
+    log_chan        = relationship("LogicalChannel", backref="phys_chan",
                                    foreign_keys="[LogicalChannel.phys_chan_id]")
 
     transmitter_id  = Column(Integer, ForeignKey("transmitter.id"))
     transmitter     = relationship("Transmitter", back_populates="channels")
+
+    receiver_id     = Column(Integer, ForeignKey("receiver.id"))
+    receiver        = relationship("Receiver", back_populates="channels")
 
     def q(self):
         if isinstance(self.logical_channel, Qubit):
@@ -378,9 +381,6 @@ class ReceiverChannel(PhysicalChannel, ChannelMixin):
     kernel_bias        = Column(Float, default=0.0, nullable=False)
     threshold          = Column(Float, default=0.0, nullable=False)
     threshold_invert   = Column(Boolean, default=False, nullable=False)
-
-    receiver_id        = Column(Integer, ForeignKey("receiver.id"))
-    receiver           = relationship("Receiver", back_populates="channels")
 
     triggering_chan_id = Column(Integer, ForeignKey("measurement.id"))
 
