@@ -213,7 +213,7 @@ class Write(OutputProxy, NodeMixin):
     filename      = Column(String,  default = "auspex_default.h5", nullable=False)
     groupname     = Column(String,  default = "main", nullable=False)
     add_date      = Column(Boolean, default = False, nullable=False)
-    save_settings = Column(Boolean, default = True, nullable=False)
+    # save_settings = Column(Boolean, default = True, nullable=False)
 
 class Buffer(OutputProxy, NodeMixin):
     """Saves data in a buffer"""
