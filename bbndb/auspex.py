@@ -254,7 +254,7 @@ class QubitProxy(NodeMixin, NodeProxy):
 
     def set_stream_type(self, stream_type):
         if stream_type not in ["raw", "demodulated", "integrated", "averaged"]:
-            raise ValueError(f"Stream type {stream_type} must be one of raw, demodulated, integrated, or result.")
+            raise ValueError(f"Stream type {stream_type} must be one of raw, demodulated, integrated, or averaged.")
         if stream_type not in self.available_streams:
             raise ValueError(f"Stream type {stream_type} is not avaible for {self.qubit_name}. Must be one of {self.available_streams}")
         self.stream_type = stream_type
