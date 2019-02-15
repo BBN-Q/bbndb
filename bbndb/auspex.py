@@ -210,7 +210,7 @@ class Display(OutputProxy, NodeMixin):
 class Write(OutputProxy, NodeMixin):
     """Writes data to file."""
     id = Column(Integer, ForeignKey("outputproxy.id"), primary_key=True)
-    filename      = Column(String,  default = "auspex_default.h5", nullable=False)
+    filename      = Column(String,  default = "output.auspex", nullable=False)
     groupname     = Column(String,  default = "main", nullable=False)
     add_date      = Column(Boolean, default = False, nullable=False)
     # save_settings = Column(Boolean, default = True, nullable=False)
