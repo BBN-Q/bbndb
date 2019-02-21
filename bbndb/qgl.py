@@ -85,16 +85,14 @@ class ChannelDatabase(session.Base):
     instruments  = relationship("Instrument", backref="channel_db", cascade="all, delete, delete-orphan")
     processors   = relationship("Processor", backref="channel_db", cascade="all, delete, delete-orphan")
     attenuators  = relationship("Attenuator", backref="channel_db", cascade="all, delete, delete-orphan")
+    DCSources    = relationship("DCSource", backref="channel_db", cascade="all, delete, delete-orphan")
 
     def all_instruments(self):
-        return self.generators + self.transmitters + self.receivers + self.transceivers + self.instruments + self.processors + self.attenuators
-
+        return self.generators + self.transmitters + self.receivers + self.transceivers + self.instruments + self.processors + self.attenuators + self.DCSources
     def __repr__(self):
         return str(self)
     def __str__(self):
         return f"ChannelDatabase(id={self.id}, label={self.label})"
-    def all_instruments(self):
-        return self.generators + self.transmitters + self.receivers + self.transceivers + self.instruments + self.processors
 
 class Instrument(DatabaseItem, session.Base):
     model      = Column(String, nullable=False)
@@ -137,6 +135,10 @@ class SpectrumAnalyzer(DatabaseItem, session.Base):
     model     = Column(String, nullable=False)
     address   = Column(String)
     LO_source = relationship("Generator", uselist=False, foreign_keys="[Generator.spectrumanalyzer_id]")
+
+class DCSource(DatabaseItem, session.Base):
+    model     = Column(String, nullable=False)
+    address   = Column(String)
 
 class Receiver(DatabaseItem, session.Base):
     """A receiver , or generally an analog to digitial converter"""
