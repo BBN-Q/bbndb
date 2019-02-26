@@ -86,9 +86,10 @@ class ChannelDatabase(session.Base):
     processors   = relationship("Processor", backref="channel_db", cascade="all, delete, delete-orphan")
     attenuators  = relationship("Attenuator", backref="channel_db", cascade="all, delete, delete-orphan")
     DCSources    = relationship("DCSource", backref="channel_db", cascade="all, delete, delete-orphan")
+    spectrum_analyzers = relationship("SpectrumAnalyzer", backref='channel_db', cascade='all, delete, delete-orphan')
 
     def all_instruments(self):
-        return self.generators + self.transmitters + self.receivers + self.transceivers + self.instruments + self.processors + self.attenuators + self.DCSources
+        return self.generators + self.transmitters + self.receivers + self.transceivers + self.instruments + self.processors + self.attenuators + self.DCSources + self.spectrum_analyzers
     def __repr__(self):
         return str(self)
     def __str__(self):
@@ -128,6 +129,7 @@ class Generator(DatabaseItem, session.Base):
     reference        = Column(String)
 
     spectrumanalyzer_id = Column(Integer, ForeignKey("spectrumanalyzer.id"))
+    DCsource_id = Column(Integer, ForeignKey('dcsource.id'))
 
     phys_chans = relationship("PhysicalChannel", back_populates="generator")
 
@@ -135,10 +137,13 @@ class SpectrumAnalyzer(DatabaseItem, session.Base):
     model     = Column(String, nullable=False)
     address   = Column(String)
     LO_source = relationship("Generator", uselist=False, foreign_keys="[Generator.spectrumanalyzer_id]")
+    phys_chans   = relationship("PhysicalChannel", back_populates = 'spectrumanalyzer')
 
 class DCSource(DatabaseItem, session.Base):
     model     = Column(String, nullable=False)
     address   = Column(String)
+    pump_source = relationship("Generator", uselist=False, foreign_keys="[Generator.DCsource_id]")
+    phys_chans  = relationship('PhysicalChannel', back_populates = 'DCsource')
 
 class Receiver(DatabaseItem, session.Base):
     """A receiver , or generally an analog to digitial converter"""
@@ -305,7 +310,13 @@ class PhysicalChannel(ChannelMixin, Channel):
     generator_id    = Column(Integer, ForeignKey("generator.id"))
     generator       = relationship("Generator", back_populates="phys_chans")
 
-    log_chan        = relationship("LogicalChannel", backref="phys_chan",
+    spectrumanalyzer_id = Column(Integer, ForeignKey("spectrumanalyzer.id"))
+    spectrumanalyzer = relationship("SpectrumAnalyzer", back_populates="phys_chans")
+
+    DCsource_id = Column(Integer, ForeignKey('dcsource.id'))
+    DCsource = relationship("DCSource", back_populates="phys_chans")
+
+    log_chan    = relationship("LogicalChannel", backref="phys_chan",
                                    foreign_keys="[LogicalChannel.phys_chan_id]")
 
     transmitter_id  = Column(Integer, ForeignKey("transmitter.id"))
