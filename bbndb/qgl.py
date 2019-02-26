@@ -160,7 +160,7 @@ class Receiver(DatabaseItem, session.Base):
     acquire_mode     = Column(String, default="digitizer", nullable=False)
     reference        = Column(String, default="external")
 
-    channels = relationship("ReceiverChannel", back_populates="receiver", cascade="all, delete, delete-orphan")
+    channels = relationship("PhysicalChannel", back_populates="receiver", cascade="all, delete, delete-orphan")
 
     @validates('acquire_mode')
     def validate_acquire_mode(self, key, source):
@@ -322,6 +322,9 @@ class PhysicalChannel(ChannelMixin, Channel):
     transmitter_id  = Column(Integer, ForeignKey("transmitter.id"))
     transmitter     = relationship("Transmitter", back_populates="channels")
 
+    receiver_id     = Column(Integer, ForeignKey("receiver.id"))
+    receiver        = relationship("Receiver", back_populates="channels")
+
     def q(self):
         if isinstance(self.logical_channel, Qubit):
             return self.logical_channel
@@ -336,6 +339,11 @@ class LogicalChannel(ChannelMixin, Channel):
     pulse_params = Column(MutableDict.as_mutable(PickleType), default={})
 
     phys_chan_id = Column(Integer, ForeignKey("physicalchannel.id"))
+    gate_chan_id = Column(Integer, ForeignKey("logicalchannel.id"), nullable=True)
+    gate_chan    = relationship("LogicalChannel", uselist = False,
+                    foreign_keys=[gate_chan_id],
+                    remote_side="LogicalChannel.id",
+                    backref=backref("gated_chan", uselist=False))
 
 class PhysicalMarkerChannel(PhysicalChannel, ChannelMixin):
     '''
@@ -387,9 +395,6 @@ class ReceiverChannel(PhysicalChannel, ChannelMixin):
     threshold          = Column(Float, default=0.0, nullable=False)
     threshold_invert   = Column(Boolean, default=False, nullable=False)
 
-    receiver_id        = Column(Integer, ForeignKey("receiver.id"))
-    receiver           = relationship("Receiver", back_populates="channels")
-
     triggering_chan_id = Column(Integer, ForeignKey("measurement.id"))
 
     def pulse_check(name):
@@ -408,7 +413,6 @@ class LogicalMarkerChannel(LogicalChannel, ChannelMixin):
     id = Column(Integer, ForeignKey("logicalchannel.id"), primary_key=True)
 
     meas_chan_id = Column(Integer, ForeignKey("measurement.id"))
-    meas_gate_id = Column(Integer, ForeignKey("measurement.id"))
 
     def __init__(self, **kwargs):
         if "pulse_params" not in kwargs.keys():
@@ -454,7 +458,6 @@ class Measurement(LogicalChannel, ChannelMixin):
     control_chan_id = Column(Integer, ForeignKey("qubit.id"))
 
     trig_chan       = relationship("LogicalMarkerChannel", uselist=False, backref="meas_chan", foreign_keys="[LogicalMarkerChannel.meas_chan_id]")
-    gate_chan       = relationship("LogicalMarkerChannel", uselist=False, backref="trig_meas", foreign_keys="[LogicalMarkerChannel.meas_gate_id]")
     receiver_chan   = relationship("ReceiverChannel", uselist=False, backref="triggering_chan", foreign_keys="[ReceiverChannel.triggering_chan_id]")
     # attenuator_chan = relationship("AttenuatorChannel", uselist=False, backref="measuring_chan", foreign_keys="[AttenuatorChannel.measuring_chan_id]")
 
@@ -465,7 +468,7 @@ class Measurement(LogicalChannel, ChannelMixin):
 
     def __init__(self, **kwargs):
         if "pulse_params" not in kwargs.keys():
-            kwargs["pulse_params"] =  {'length': 500e-9,
+            kwargs["pulse_params"] =  {'length': 100.0e-9,
                                 'amp': 1.0,
                                 'shape_fun': "tanh",
                                 'cutoff': 2,

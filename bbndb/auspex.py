@@ -210,10 +210,10 @@ class Display(OutputProxy, NodeMixin):
 class Write(OutputProxy, NodeMixin):
     """Writes data to file."""
     id = Column(Integer, ForeignKey("outputproxy.id"), primary_key=True)
-    filename      = Column(String,  default = "auspex_default.h5", nullable=False)
+    filename      = Column(String,  default = "output.auspex", nullable=False)
     groupname     = Column(String,  default = "main", nullable=False)
     add_date      = Column(Boolean, default = False, nullable=False)
-    save_settings = Column(Boolean, default = True, nullable=False)
+    # save_settings = Column(Boolean, default = True, nullable=False)
 
 class Buffer(OutputProxy, NodeMixin):
     """Saves data in a buffer"""
@@ -254,7 +254,7 @@ class QubitProxy(NodeMixin, NodeProxy):
 
     def set_stream_type(self, stream_type):
         if stream_type not in ["raw", "demodulated", "integrated", "averaged"]:
-            raise ValueError(f"Stream type {stream_type} must be one of raw, demodulated, integrated, or result.")
+            raise ValueError(f"Stream type {stream_type} must be one of raw, demodulated, integrated, or averaged.")
         if stream_type not in self.available_streams:
             raise ValueError(f"Stream type {stream_type} is not avaible for {self.qubit_name}. Must be one of {self.available_streams}")
         self.stream_type = stream_type
