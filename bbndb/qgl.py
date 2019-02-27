@@ -153,6 +153,7 @@ class Receiver(DatabaseItem, session.Base):
     trigger_source   = Column(String, default="external", nullable=False)
     record_length    = Column(Integer, default=1024, nullable=False)
     sampling_rate    = Column(Float, default=1e9, nullable=False)
+    vertical_scale   = Column(Float, default=1.0, nullable=False)
     number_segments  = Column(Integer, default=1) # This should be automati, nullable=Falsec
     number_waveforms = Column(Integer, default=1) # This should be automati, nullable=Falsec
     number_averages  = Column(Integer, default=100) # This should be automati, nullable=Falsec
