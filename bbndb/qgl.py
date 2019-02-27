@@ -469,7 +469,7 @@ class Measurement(LogicalChannel, ChannelMixin):
 
     def __init__(self, **kwargs):
         if "pulse_params" not in kwargs.keys():
-            kwargs["pulse_params"] =  {'length': 1000.0e-9,
+            kwargs["pulse_params"] =  {'length': 100.0e-9,
                                 'amp': 1.0,
                                 'shape_fun': "tanh",
                                 'cutoff': 2,
