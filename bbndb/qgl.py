@@ -77,15 +77,15 @@ class ChannelDatabase(session.Base):
     label        = Column(String, nullable=False)
     time         = Column(DateTime)
 
-    channels     = relationship("Channel", backref="channel_db", cascade="all, delete, delete-orphan")
-    generators   = relationship("Generator", backref="channel_db", cascade="all, delete, delete-orphan")
-    transmitters = relationship("Transmitter", backref="channel_db", cascade="all, delete, delete-orphan")
-    receivers    = relationship("Receiver", backref="channel_db", cascade="all, delete, delete-orphan")
-    transceivers = relationship("Transceiver", backref="channel_db", cascade="all, delete, delete-orphan")
-    instruments  = relationship("Instrument", backref="channel_db", cascade="all, delete, delete-orphan")
-    processors   = relationship("Processor", backref="channel_db", cascade="all, delete, delete-orphan")
-    attenuators  = relationship("Attenuator", backref="channel_db", cascade="all, delete, delete-orphan")
-    DCSources    = relationship("DCSource", backref="channel_db", cascade="all, delete, delete-orphan")
+    channels           = relationship("Channel", backref="channel_db", cascade="all, delete, delete-orphan")
+    generators         = relationship("Generator", backref="channel_db", cascade="all, delete, delete-orphan")
+    transmitters       = relationship("Transmitter", backref="channel_db", cascade="all, delete, delete-orphan")
+    receivers          = relationship("Receiver", backref="channel_db", cascade="all, delete, delete-orphan")
+    transceivers       = relationship("Transceiver", backref="channel_db", cascade="all, delete, delete-orphan")
+    instruments        = relationship("Instrument", backref="channel_db", cascade="all, delete, delete-orphan")
+    processors         = relationship("Processor", backref="channel_db", cascade="all, delete, delete-orphan")
+    attenuators        = relationship("Attenuator", backref="channel_db", cascade="all, delete, delete-orphan")
+    DCSources          = relationship("DCSource", backref="channel_db", cascade="all, delete, delete-orphan")
     spectrum_analyzers = relationship("SpectrumAnalyzer", backref='channel_db', cascade='all, delete, delete-orphan')
 
     def all_instruments(self):
@@ -468,7 +468,7 @@ class Measurement(LogicalChannel, ChannelMixin):
 
     def __init__(self, **kwargs):
         if "pulse_params" not in kwargs.keys():
-            kwargs["pulse_params"] =  {'length': 100.0e-9,
+            kwargs["pulse_params"] =  {'length': 1000.0e-9,
                                 'amp': 1.0,
                                 'shape_fun': "tanh",
                                 'cutoff': 2,
