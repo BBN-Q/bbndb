@@ -152,6 +152,7 @@ class Receiver(DatabaseItem, session.Base):
     transceiver_id   = Column(Integer, ForeignKey("transceiver.id"))
     acquire_mode     = Column(String, default="digitizer", nullable=False)
     reference        = Column(String, default="external")
+    vertical_scale   = Column(Float, default=1, nullable=False)
 
     channels = relationship("PhysicalChannel", back_populates="receiver", cascade="all, delete, delete-orphan")
 
