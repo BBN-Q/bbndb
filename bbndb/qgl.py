@@ -4,7 +4,7 @@ Channels is where we store information for mapping virtual (qubit) channel to re
 Created on Jan 19, 2012 in the QGL package
 
 Original Author: Colm Ryan
-Modified By: Graham Rowlands (moved to bbndb and ported to ORM)
+Modified By: Graham Rowlands (moved to bbndb using sqlalchemy)
 
 Copyright 2013 Raytheon BBN Technologies
 
@@ -303,28 +303,28 @@ class PhysicalChannel(ChannelMixin, Channel):
     '''
     The main class for actual Transmitter channels.
     '''
-    instrument      = Column(String) # i.e. the Transmitter or receiver
-    translator      = Column(String)
-    sampling_rate   = Column(Float, default=1.2e9, nullable=False)
-    delay           = Column(Float, default=0.0, nullable=False)
+    instrument          = Column(String) # i.e. the Transmitter or receiver
+    translator          = Column(String)
+    sampling_rate       = Column(Float, default=1.2e9, nullable=False)
+    delay               = Column(Float, default=0.0, nullable=False)
 
-    generator_id    = Column(Integer, ForeignKey("generator.id"))
-    generator       = relationship("Generator", back_populates="phys_chans")
+    generator_id        = Column(Integer, ForeignKey("generator.id"))
+    generator           = relationship("Generator", back_populates="phys_chans")
 
     spectrumanalyzer_id = Column(Integer, ForeignKey("spectrumanalyzer.id"))
-    spectrumanalyzer = relationship("SpectrumAnalyzer", back_populates="phys_chans")
+    spectrumanalyzer    = relationship("SpectrumAnalyzer", back_populates="phys_chans")
 
-    DCsource_id = Column(Integer, ForeignKey('dcsource.id'))
-    DCsource = relationship("DCSource", back_populates="phys_chans")
+    DCsource_id         = Column(Integer, ForeignKey('dcsource.id'))
+    DCsource            = relationship("DCSource", back_populates="phys_chans")
 
-    log_chan    = relationship("LogicalChannel", backref="phys_chan",
-                                   foreign_keys="[LogicalChannel.phys_chan_id]")
+    log_chan            = relationship("LogicalChannel", backref="phys_chan",
+                                foreign_keys = "[LogicalChannel.phys_chan_id]")
 
-    transmitter_id  = Column(Integer, ForeignKey("transmitter.id"))
-    transmitter     = relationship("Transmitter", back_populates="channels")
+    transmitter_id      = Column(Integer, ForeignKey("transmitter.id"))
+    transmitter         = relationship("Transmitter", back_populates="channels")
 
-    receiver_id     = Column(Integer, ForeignKey("receiver.id"))
-    receiver        = relationship("Receiver", back_populates="channels")
+    receiver_id         = Column(Integer, ForeignKey("receiver.id"))
+    receiver            = relationship("Receiver", back_populates="channels")
 
     def q(self):
         if isinstance(self.logical_channel, Qubit):
@@ -511,22 +511,4 @@ class Edge(LogicalChannel, ChannelMixin):
             return True
         else:
             return False
-# if __name__ == '__main__':
 
-    # from sqlalchemy import create_engine
-    # engine = create_engine('sqlite:///:memory:', echo=True)
-    # session.Base.metadata.create_all(engine)
-    # Session.configure(bind=engine)
-    # session = Session()
-
-    # q1 = Qubit(label="q1")
-    # q2 = Qubit(label="q2")
-    # e1 = Edge(label="e1", source=q1, target=q2)
-    # session.add_all([q1,q2,e1])
-
-    # b = ChannelDatabase(label="working2")
-    # s = Generator(label="Src1", model="abc", power=10.0, frequency=5.0e9)
-    # b.sources.append(s)
-    # session.add_all([b,s])
-    # session.new
-    # session.commit()
