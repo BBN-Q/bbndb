@@ -4,7 +4,7 @@ Channels is where we store information for mapping virtual (qubit) channel to re
 Created on Jan 19, 2012 in the QGL package
 
 Original Author: Colm Ryan
-Modified By: Graham Rowlands (moved to bbndb and ported to ORM)
+Modified By: Graham Rowlands (moved to bbndb using sqlalchemy)
 
 Copyright 2013 Raytheon BBN Technologies
 
@@ -77,15 +77,15 @@ class ChannelDatabase(session.Base):
     label        = Column(String, nullable=False)
     time         = Column(DateTime)
 
-    channels     = relationship("Channel", backref="channel_db", cascade="all, delete, delete-orphan")
-    generators   = relationship("Generator", backref="channel_db", cascade="all, delete, delete-orphan")
-    transmitters = relationship("Transmitter", backref="channel_db", cascade="all, delete, delete-orphan")
-    receivers    = relationship("Receiver", backref="channel_db", cascade="all, delete, delete-orphan")
-    transceivers = relationship("Transceiver", backref="channel_db", cascade="all, delete, delete-orphan")
-    instruments  = relationship("Instrument", backref="channel_db", cascade="all, delete, delete-orphan")
-    processors   = relationship("Processor", backref="channel_db", cascade="all, delete, delete-orphan")
-    attenuators  = relationship("Attenuator", backref="channel_db", cascade="all, delete, delete-orphan")
-    DCSources    = relationship("DCSource", backref="channel_db", cascade="all, delete, delete-orphan")
+    channels           = relationship("Channel", backref="channel_db", cascade="all, delete, delete-orphan")
+    generators         = relationship("Generator", backref="channel_db", cascade="all, delete, delete-orphan")
+    transmitters       = relationship("Transmitter", backref="channel_db", cascade="all, delete, delete-orphan")
+    receivers          = relationship("Receiver", backref="channel_db", cascade="all, delete, delete-orphan")
+    transceivers       = relationship("Transceiver", backref="channel_db", cascade="all, delete, delete-orphan")
+    instruments        = relationship("Instrument", backref="channel_db", cascade="all, delete, delete-orphan")
+    processors         = relationship("Processor", backref="channel_db", cascade="all, delete, delete-orphan")
+    attenuators        = relationship("Attenuator", backref="channel_db", cascade="all, delete, delete-orphan")
+    DCSources          = relationship("DCSource", backref="channel_db", cascade="all, delete, delete-orphan")
     spectrum_analyzers = relationship("SpectrumAnalyzer", backref='channel_db', cascade='all, delete, delete-orphan')
 
     def all_instruments(self):
@@ -153,6 +153,7 @@ class Receiver(DatabaseItem, session.Base):
     trigger_source   = Column(String, default="external", nullable=False)
     record_length    = Column(Integer, default=1024, nullable=False)
     sampling_rate    = Column(Float, default=1e9, nullable=False)
+    vertical_scale   = Column(Float, default=1.0, nullable=False)
     number_segments  = Column(Integer, default=1) # This should be automati, nullable=Falsec
     number_waveforms = Column(Integer, default=1) # This should be automati, nullable=Falsec
     number_averages  = Column(Integer, default=100) # This should be automati, nullable=Falsec
@@ -303,28 +304,28 @@ class PhysicalChannel(ChannelMixin, Channel):
     '''
     The main class for actual Transmitter channels.
     '''
-    instrument      = Column(String) # i.e. the Transmitter or receiver
-    translator      = Column(String)
-    sampling_rate   = Column(Float, default=1.2e9, nullable=False)
-    delay           = Column(Float, default=0.0, nullable=False)
+    instrument          = Column(String) # i.e. the Transmitter or receiver
+    translator          = Column(String)
+    sampling_rate       = Column(Float, default=1.2e9, nullable=False)
+    delay               = Column(Float, default=0.0, nullable=False)
 
-    generator_id    = Column(Integer, ForeignKey("generator.id"))
-    generator       = relationship("Generator", back_populates="phys_chans")
+    generator_id        = Column(Integer, ForeignKey("generator.id"))
+    generator           = relationship("Generator", back_populates="phys_chans")
 
     spectrumanalyzer_id = Column(Integer, ForeignKey("spectrumanalyzer.id"))
-    spectrumanalyzer = relationship("SpectrumAnalyzer", back_populates="phys_chans")
+    spectrumanalyzer    = relationship("SpectrumAnalyzer", back_populates="phys_chans")
 
-    DCsource_id = Column(Integer, ForeignKey('dcsource.id'))
-    DCsource = relationship("DCSource", back_populates="phys_chans")
+    DCsource_id         = Column(Integer, ForeignKey('dcsource.id'))
+    DCsource            = relationship("DCSource", back_populates="phys_chans")
 
-    log_chan    = relationship("LogicalChannel", backref="phys_chan",
-                                   foreign_keys="[LogicalChannel.phys_chan_id]")
+    log_chan            = relationship("LogicalChannel", backref="phys_chan",
+                                foreign_keys = "[LogicalChannel.phys_chan_id]")
 
-    transmitter_id  = Column(Integer, ForeignKey("transmitter.id"))
-    transmitter     = relationship("Transmitter", back_populates="channels")
+    transmitter_id      = Column(Integer, ForeignKey("transmitter.id"))
+    transmitter         = relationship("Transmitter", back_populates="channels")
 
-    receiver_id     = Column(Integer, ForeignKey("receiver.id"))
-    receiver        = relationship("Receiver", back_populates="channels")
+    receiver_id         = Column(Integer, ForeignKey("receiver.id"))
+    receiver            = relationship("Receiver", back_populates="channels")
 
     def q(self):
         if isinstance(self.logical_channel, Qubit):
@@ -511,22 +512,4 @@ class Edge(LogicalChannel, ChannelMixin):
             return True
         else:
             return False
-# if __name__ == '__main__':
 
-    # from sqlalchemy import create_engine
-    # engine = create_engine('sqlite:///:memory:', echo=True)
-    # session.Base.metadata.create_all(engine)
-    # Session.configure(bind=engine)
-    # session = Session()
-
-    # q1 = Qubit(label="q1")
-    # q2 = Qubit(label="q2")
-    # e1 = Edge(label="e1", source=q1, target=q2)
-    # session.add_all([q1,q2,e1])
-
-    # b = ChannelDatabase(label="working2")
-    # s = Generator(label="Src1", model="abc", power=10.0, frequency=5.0e9)
-    # b.sources.append(s)
-    # session.add_all([b,s])
-    # session.new
-    # session.commit()
