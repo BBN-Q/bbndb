@@ -6,6 +6,18 @@ from .session import Session, engine, Base, session_scope, session
 from sqlalchemy import create_engine
 from sqlalchemy.inspection import inspect
 from sqlalchemy.orm import class_mapper
+import sqlalchemy
+
+def set_defaults_up_front
+    for key, col in sqlalchemy.inspect(obj.__class__).columns.items():
+        if hasattr(col, 'default'):
+            if col.default is not None:
+                if callable(col.default.arg):
+                    setattr(obj, key, col.default.arg(obj))
+                else:
+                    setattr(obj, key, col.default.arg)
+mapper = sqlalchemy.orm.mapper
+sqlalchemy.event.listen(mapper, 'init', set_defaults_up_front)
 
 def copy_sqla_object(obj, omit_fk=True):
     """
