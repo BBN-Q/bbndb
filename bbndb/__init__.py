@@ -8,7 +8,7 @@ from sqlalchemy.inspection import inspect
 from sqlalchemy.orm import class_mapper
 import sqlalchemy
 
-def set_defaults_up_front
+def set_defaults_up_front(obj, args, kwargs):
     for key, col in sqlalchemy.inspect(obj.__class__).columns.items():
         if hasattr(col, 'default'):
             if col.default is not None:
