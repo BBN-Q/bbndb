@@ -170,6 +170,7 @@ class FidelityKernel(FilterProxy, NodeMixin):
     zero_mean                = Column(Boolean, nullable=False, default=False)
     logistic_regression      = Column(Boolean, nullable=False, default=False)
     tolerance                = Column(Float, nullable=False, default=1.0e-3)
+    kernel                   = Column(LargeBinary)
 
 class Integrate(FilterProxy, NodeMixin):
     id = Column(Integer, ForeignKey("filterproxy.id"), primary_key=True)
@@ -261,10 +262,10 @@ class QubitProxy(NodeMixin, NodeProxy):
         return filter_obj
 
     def set_stream_type(self, stream_type):
-        if stream_type not in ["raw", "demodulated", "integrated", "averaged"]:
-            raise ValueError(f"Stream type {stream_type} must be one of raw, demodulated, integrated, or averaged.")
+        if stream_type not in ["raw", "demodulated", "integrated", "state", "averaged"]:
+            raise ValueError(f"Stream type {stream_type} must be one of raw, demodulated, integrated, state, or averaged.")
         if stream_type not in self.available_streams:
-            raise ValueError(f"Stream type {stream_type} is not avaible for {self.qubit_name}. Must be one of {self.available_streams}")
+            raise ValueError(f"Stream type {stream_type} is not available for {self.qubit_name}. Must be one of {self.available_streams}")
         self.stream_type = stream_type
 
     def clear_pipeline(self):
@@ -292,7 +293,7 @@ class QubitProxy(NodeMixin, NodeProxy):
                 self.add(Demodulate()).add(Integrate()).add(Output(groupname=self.qubit_name+'-main'))
             if self.stream_type.lower() == "demodulated":
                 self.add(Integrate()).add(Output(groupname=self.qubit_name+'-main'))
-            if self.stream_type.lower() == "integrated":
+            if self.stream_type.lower() == ("integrated" or "state"):
                 self.add(Output(groupname=self.qubit_name+'-main'))
             if self.stream_type.lower() == "averaged":
                 raise Exception("Cannot have averaged stream without averaging?!")

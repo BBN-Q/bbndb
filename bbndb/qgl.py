@@ -414,7 +414,7 @@ class ReceiverChannel(PhysicalChannel, ChannelMixin):
 
     @validates('stream_type')
     def validate_stream_type(self, key, source):
-        assert source in ["raw", "demodulated", "integrated", "averaged"]
+        assert source in ["raw", "demodulated", "integrated", "state", "averaged"]
         return source
 
 class LogicalMarkerChannel(LogicalChannel, ChannelMixin):
