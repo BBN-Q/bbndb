@@ -10,6 +10,8 @@ from sqlalchemy import inspect
 from IPython.display import HTML, display
 from . import session #session.Base, Session, engine
 
+__current_pipeline__ = None
+
 class Connection(session.Base):
     __tablename__ = "connection"
     id            = Column(Integer, primary_key=True)
