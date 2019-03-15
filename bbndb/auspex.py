@@ -84,9 +84,8 @@ class FilterProxy(NodeMixin, NodeProxy):
 
         filter_obj.pipelineMgr = self.pipelineMgr
         filter_obj.qubit_name = self.qubit_name
-
-        self.pipelineMgr.meas_graph.add_node(str(filter_obj), node_obj=filter_obj)
-        self.pipelineMgr.meas_graph.add_edge(str(self), str(filter_obj), connector_in=connector_in, connector_out=connector_out)
+        self.pipelineMgr.meas_graph.add_node(filter_obj.node_label(), node_obj=filter_obj)
+        self.pipelineMgr.meas_graph.add_edge(self.node_label(), filter_obj.node_label(), connector_in=connector_in, connector_out=connector_out)
         self.pipelineMgr.session.add(filter_obj)
         return filter_obj
 
@@ -109,7 +108,7 @@ class FilterProxy(NodeMixin, NodeProxy):
         return f"{self.__class__.__name__} {self.label} ({self.qubit_name})"
 
     def __getitem__(self, key):
-        ss = list(self.pipelineMgr.meas_graph.successors(str(self)))
+        ss = list(self.pipelineMgr.meas_graph.successors(self.node_label()))
         label_matches = [self.pipelineMgr.meas_graph.nodes[s]['node_obj'] for s in ss if self.pipelineMgr.meas_graph.nodes[s]['node_obj'].label == key]
         class_matches = [self.pipelineMgr.meas_graph.nodes[s]['node_obj'] for s in ss if self.pipelineMgr.meas_graph.nodes[s]['node_obj'].__class__.__name__ == key]
         if len(label_matches) == 1:
@@ -254,10 +253,10 @@ class QubitProxy(NodeMixin, NodeProxy):
         filter_obj.qubit_name  = self.qubit_name
         filter_obj.pipelineMgr = self.pipelineMgr
         # filter_obj.exp         = self.pipeline
-        if str(self) not in self.pipelineMgr.meas_graph.nodes():
-            self.pipelineMgr.meas_graph.add_node(str(self), node_obj=self)
-        self.pipelineMgr.meas_graph.add_node(str(filter_obj), node_obj=filter_obj)
-        self.pipelineMgr.meas_graph.add_edge(str(self), str(filter_obj), connector_in=connector_in, connector_out=connector_out)
+        if self.node_label() not in self.pipelineMgr.meas_graph.nodes():
+            self.pipelineMgr.meas_graph.add_node(self.node_label(), node_obj=self)
+        self.pipelineMgr.meas_graph.add_node(filter_obj.node_label(), node_obj=filter_obj)
+        self.pipelineMgr.meas_graph.add_edge(self.node_label(), filter_obj.node_label(), connector_in=connector_in, connector_out=connector_out)
         self.pipelineMgr.session.add(filter_obj)
 
         return filter_obj
@@ -317,7 +316,7 @@ class QubitProxy(NodeMixin, NodeProxy):
         return f"Qubit {self.qubit_name}"
 
     def __getitem__(self, key):
-        ss = list(self.pipelineMgr.meas_graph.successors(str(self)))
+        ss = list(self.pipelineMgr.meas_graph.successors(self.node_label()))
         label_matches = [self.pipelineMgr.meas_graph.nodes[s]['node_obj'] for s in ss if self.pipelineMgr.meas_graph.nodes[s]['node_obj'].label == key]
         class_matches = [self.pipelineMgr.meas_graph.nodes[s]['node_obj'] for s in ss if self.pipelineMgr.meas_graph.nodes[s]['node_obj'].__class__.__name__ == key]
         if len(label_matches) == 1:
