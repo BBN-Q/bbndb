@@ -1,6 +1,7 @@
 import numpy as np
 from copy import deepcopy
 import datetime
+import random
 import networkx as nx
 
 from sqlalchemy import Column, DateTime, String, Boolean, Float, Integer, LargeBinary, ForeignKey, func, JSON, PickleType
@@ -25,7 +26,7 @@ class Connection(session.Base):
 class NodeProxy(session.Base):
     __tablename__ = "nodeproxy"
     id              = Column(Integer, primary_key=True)
-    label           = Column(String)
+    label           = Column(String, nullable=False, default="Anonymous")
     qubit_name      = Column(String)
     node_type       = Column(String(50))
     connection_to   = relationship("Connection", uselist=False, backref='node1', foreign_keys="[Connection.node1_id]")
@@ -75,6 +76,8 @@ class FilterProxy(NodeMixin, NodeProxy):
         # with db_session:
         super(FilterProxy, self).__init__(**kwargs)
         self.pipelineMgr = __current_pipeline__
+        if "label" not in kwargs:
+            self.label = ("%03x" % random.getrandbits(16))
 
     def add(self, filter_obj, connector_out="source", connector_in="sink"):
         # if not self.pipeline:
