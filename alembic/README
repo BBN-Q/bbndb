@@ -1,0 +1,11 @@
+Alembic is used to upgrade any previous database versions to accomodate changes to the schema.
+
+We assume that the database is located at bbndb/BBN.sqlite (where bbndb is the base directory of the package not the source directory.) 
+
+For migrating c.f.:
+https://alembic.sqlalchemy.org/en/latest/autogenerate.html
+
+For merging c.f.:
+https://alembic.sqlalchemy.org/en/latest/branches.html#merging-branches
+
+When submitting a pull request it will be helpful to indicate whether any migrations are performed.
