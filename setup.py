@@ -9,7 +9,7 @@ setup(
     description='BBN Configuration Database',
     long_description=open('README.md').read(),
     install_requires=[
-		"sqlalchemy >= 1.2.17",
+		"sqlalchemy >= 1.2.15",
 		"numpy >= 1.11.1",
 		"networkx >= 1.11"
     ]

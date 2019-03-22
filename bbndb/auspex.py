@@ -8,8 +8,9 @@ from sqlalchemy.orm import relationship, backref, validates
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy import inspect
 from IPython.display import HTML, display
-
 from . import session #session.Base, Session, engine
+
+__current_pipeline__ = None
 
 class Connection(session.Base):
     __tablename__ = "connection"
@@ -35,7 +36,7 @@ class NodeProxy(session.Base):
         'polymorphic_on':node_type
     }
 
-    def print(self):
+    def print(self, show=True):
         table_code = ""
         label = self.label if self.label else "Unlabeled"
         inspr = inspect(self)
@@ -44,7 +45,12 @@ class NodeProxy(session.Base):
                 hist = getattr(inspr.attrs, c.name).history
                 dirty = "Yes" if hist.has_changes() else ""
                 table_code += f"<tr><td>{c.name}</td><td>{getattr(self,c.name)}</td><td>{dirty}</td></tr>"
-        display(HTML(f"<b>{self.node_type}</b> ({self.qubit_name}) <i>{label}</i></br><table><tr><th>Attribute</th><th>Value</th><th>Uncommitted Changes</th></tr><tr>{table_code}</tr></table>"))
+        html = f"<b>{self.node_type}</b> ({self.qubit_name}) <i>{label}</i></br><table style='{{padding:0.5em;}}'><tr><th>Attribute</th><th>Value</th><th>Changes?</th></tr><tr>{table_code}</tr></table>"
+        if show:
+            display(HTML(html))
+        else:
+            return html
+
 
 class NodeMixin(object):
     @declared_attr
@@ -78,8 +84,8 @@ class FilterProxy(NodeMixin, NodeProxy):
 
         filter_obj.pipelineMgr = self.pipelineMgr
         filter_obj.qubit_name = self.qubit_name
-
-        self.pipelineMgr.meas_graph.add_edge(self, filter_obj, connector_in=connector_in, connector_out=connector_out)
+        self.pipelineMgr.meas_graph.add_node(filter_obj.node_label(), node_obj=filter_obj)
+        self.pipelineMgr.meas_graph.add_edge(self.node_label(), filter_obj.node_label(), connector_in=connector_in, connector_out=connector_out)
         self.pipelineMgr.session.add(filter_obj)
         return filter_obj
 
@@ -102,9 +108,9 @@ class FilterProxy(NodeMixin, NodeProxy):
         return f"{self.__class__.__name__} {self.label} ({self.qubit_name})"
 
     def __getitem__(self, key):
-        ss = list(self.pipelineMgr.meas_graph.successors(self))
-        label_matches = [s for s in ss if s.label == key]
-        class_matches = [s for s in ss if s.__class__.__name__ == key]
+        ss = list(self.pipelineMgr.meas_graph.successors(self.node_label()))
+        label_matches = [self.pipelineMgr.meas_graph.nodes[s]['node_obj'] for s in ss if self.pipelineMgr.meas_graph.nodes[s]['node_obj'].label == key]
+        class_matches = [self.pipelineMgr.meas_graph.nodes[s]['node_obj'] for s in ss if self.pipelineMgr.meas_graph.nodes[s]['node_obj'].__class__.__name__ == key]
         if len(label_matches) == 1:
             return label_matches[0]
         elif len(class_matches) == 1:
@@ -247,7 +253,10 @@ class QubitProxy(NodeMixin, NodeProxy):
         filter_obj.qubit_name  = self.qubit_name
         filter_obj.pipelineMgr = self.pipelineMgr
         # filter_obj.exp         = self.pipeline
-        self.pipelineMgr.meas_graph.add_edge(self, filter_obj, connector_in=connector_in, connector_out=connector_out)
+        if self.node_label() not in self.pipelineMgr.meas_graph.nodes():
+            self.pipelineMgr.meas_graph.add_node(self.node_label(), node_obj=self)
+        self.pipelineMgr.meas_graph.add_node(filter_obj.node_label(), node_obj=filter_obj)
+        self.pipelineMgr.meas_graph.add_edge(self.node_label(), filter_obj.node_label(), connector_in=connector_in, connector_out=connector_out)
         self.pipelineMgr.session.add(filter_obj)
 
         return filter_obj
@@ -261,9 +270,10 @@ class QubitProxy(NodeMixin, NodeProxy):
 
     def clear_pipeline(self):
         """Remove all nodes coresponding to the qubit"""
-        desc = nx.algorithms.dag.descendants(self.pipelineMgr.meas_graph, self)
+        desc = nx.algorithms.dag.descendants(self.pipelineMgr.meas_graph, str(self))
         for n in desc:
             # n.exp = None
+            n = self.pipelineMgr.meas_graph.nodes[n]['node_obj']
             self.pipelineMgr.session.expunge(n)
         self.pipelineMgr.meas_graph.remove_nodes_from(desc)
 
@@ -289,11 +299,9 @@ class QubitProxy(NodeMixin, NodeProxy):
                 raise Exception("Cannot have averaged stream without averaging?!")
 
     def show_pipeline(self):
-        desc = list(nx.algorithms.dag.descendants(self.pipelineMgr.meas_graph, self)) + [self]
-        labels = {n: n.node_label() for n in desc}
+        desc = list(nx.algorithms.dag.descendants(self.pipelineMgr.meas_graph, str(self))) + [str(self)]
         subgraph = self.pipelineMgr.meas_graph.subgraph(desc)
-        colors = ["#3182bd" if isinstance(n, QubitProxy) else "#ff9933" for n in subgraph.nodes()]
-        self.pipelineMgr.plot_graph(subgraph, labels, colors=colors, prog='dot')
+        return self.pipelineMgr.show_pipeline(subgraph=subgraph)
 
     def show_connectivity(self):
         pass
@@ -308,9 +316,9 @@ class QubitProxy(NodeMixin, NodeProxy):
         return f"Qubit {self.qubit_name}"
 
     def __getitem__(self, key):
-        ss = list(self.pipelineMgr.meas_graph.successors(self))
-        label_matches = [s for s in ss if s.label == key]
-        class_matches = [s for s in ss if s.__class__.__name__ == key]
+        ss = list(self.pipelineMgr.meas_graph.successors(self.node_label()))
+        label_matches = [self.pipelineMgr.meas_graph.nodes[s]['node_obj'] for s in ss if self.pipelineMgr.meas_graph.nodes[s]['node_obj'].label == key]
+        class_matches = [self.pipelineMgr.meas_graph.nodes[s]['node_obj'] for s in ss if self.pipelineMgr.meas_graph.nodes[s]['node_obj'].__class__.__name__ == key]
         if len(label_matches) == 1:
             return label_matches[0]
         elif len(class_matches) == 1:

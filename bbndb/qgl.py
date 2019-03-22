@@ -142,6 +142,9 @@ class SpectrumAnalyzer(DatabaseItem, session.Base):
 class DCSource(DatabaseItem, session.Base):
     model     = Column(String, nullable=False)
     address   = Column(String)
+    output    = Column(Boolean, default=False)
+    level     = Column(Float, default=0)
+    mode      = Column(String, default='current')
     pump_source = relationship("Generator", uselist=False, foreign_keys="[Generator.DCsource_id]")
     phys_chans  = relationship('PhysicalChannel', back_populates = 'DCsource')
 
