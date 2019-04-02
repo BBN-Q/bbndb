@@ -44,13 +44,15 @@ class NodeProxy(session.Base):
             if c.name not in ["id", "label", "qubit_name", "node_type"]:
                 hist = getattr(inspr.attrs, c.name).history
                 dirty = "Yes" if hist.has_changes() else ""
-                table_code += f"<tr><td>{c.name}</td><td>{getattr(self,c.name)}</td><td>{dirty}</td></tr>"
+                if c.name == "kernel_data":
+                    table_code += f"<tr><td>{c.name}</td><td>Binary Data of length {len(self.kernel)}</td><td>{dirty}</td></tr>"
+                else:
+                    table_code += f"<tr><td>{c.name}</td><td>{getattr(self,c.name)}</td><td>{dirty}</td></tr>"
         html = f"<b>{self.node_type}</b> ({self.qubit_name}) <i>{label}</i></br><table style='{{padding:0.5em;}}'><tr><th>Attribute</th><th>Value</th><th>Changes?</th></tr><tr>{table_code}</tr></table>"
         if show:
             display(HTML(html))
         else:
             return html
-
 
 class NodeMixin(object):
     @declared_attr
@@ -231,18 +233,43 @@ class Buffer(OutputProxy, NodeMixin):
             kwargs.pop("groupname")
         super(Buffer, self).__init__(**kwargs)
 
-class QubitProxy(NodeMixin, NodeProxy):
+class StreamSelect(NodeMixin, NodeProxy):
     """docstring for FilterProxy"""
     id = Column(Integer, ForeignKey("nodeproxy.id"), primary_key=True)
+    
+    dsp_channel = Column(Integer, default=0, nullable=False)
+    stream_type = Column(String, default='raw', nullable=False)
+    @validates('stream_type')
+    def validate_stream_type(self, key, value):
+        assert (value in ["raw", "demodulated", "integrated", "averaged"])
+        return value
+
+    dsp_channel        = Column(Integer, default=1)
+    if_freq            = Column(Float, default=0.0, nullable=False)
+    kernel_data        = Column(LargeBinary) # Binary string of np.complex128
+    kernel_bias        = Column(Float, default=0.0, nullable=False)
+    threshold          = Column(Float, default=0.0, nullable=False)
+    threshold_invert   = Column(Boolean, default=False, nullable=False)
+
+    def kernel():
+        doc = "The kernel as represented by a numpy complex128 array"
+        def fget(self):
+            if self.kernel_data:
+                return np.frombuffer(self.kernel_data, dtype=np.complex128)
+            else:
+                return np.empty((0,), dtype=np.complex128)
+        def fset(self, value):
+            self.kernel_data = value.astype(np.complex128).tobytes()
+        return locals()
+    kernel = property(**kernel())
 
     def __init__(self, pipelineMgr=None, **kwargs):
         global __current_pipeline__
-        super(QubitProxy, self).__init__(**kwargs)
+        super(StreamSelect, self).__init__(**kwargs)
         self.pipelineMgr = pipelineMgr
         __current_pipeline__ = pipelineMgr
         self.digitizer_settings = None
         self.available_streams = None
-        self.stream_type = None
 
     def add(self, filter_obj, connector_out="source", connector_in="sink"):
         # if not self.pipeline:
@@ -260,13 +287,6 @@ class QubitProxy(NodeMixin, NodeProxy):
         self.pipelineMgr.session.add(filter_obj)
 
         return filter_obj
-
-    def set_stream_type(self, stream_type):
-        if stream_type not in ["raw", "demodulated", "integrated", "averaged"]:
-            raise ValueError(f"Stream type {stream_type} must be one of raw, demodulated, integrated, or averaged.")
-        if stream_type not in self.available_streams:
-            raise ValueError(f"Stream type {stream_type} is not avaible for {self.qubit_name}. Must be one of {self.available_streams}")
-        self.stream_type = stream_type
 
     def clear_pipeline(self):
         """Remove all nodes coresponding to the qubit"""
@@ -310,10 +330,10 @@ class QubitProxy(NodeMixin, NodeProxy):
         return self.__repr__()
 
     def __repr__(self):
-        return f"Qubit {self.qubit_name}"
+        return f"StreamSelect for {self.qubit_name}"
 
     def __str__(self):
-        return f"Qubit {self.qubit_name}"
+        return f"StreamSelect for {self.qubit_name}"
 
     def __getitem__(self, key):
         ss = list(self.pipelineMgr.meas_graph.successors(self.node_label()))
