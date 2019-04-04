@@ -28,6 +28,7 @@ class NodeProxy(session.Base):
     label           = Column(String)
     qubit_name      = Column(String)
     node_type       = Column(String(50))
+    hash_val        = Column(Integer, nullable=False)
     connection_to   = relationship("Connection", uselist=False, backref='node1', foreign_keys="[Connection.node1_id]")
     connection_from = relationship("Connection", uselist=False, backref='node2', foreign_keys="[Connection.node2_id]")
 
@@ -35,6 +36,10 @@ class NodeProxy(session.Base):
         'polymorphic_identity':'channel',
         'polymorphic_on':node_type
     }
+
+    def __init__(self, **kwargs):
+        self.hash_val = int(np.random.randint(np.iinfo(np.uint32).max, dtype=np.uint32))
+        super().__init__(**kwargs)
 
     def print(self, show=True):
         table_code = ""
@@ -86,8 +91,8 @@ class FilterProxy(NodeMixin, NodeProxy):
 
         filter_obj.pipelineMgr = self.pipelineMgr
         filter_obj.qubit_name = self.qubit_name
-        self.pipelineMgr.meas_graph.add_node(filter_obj.node_label(), node_obj=filter_obj)
-        self.pipelineMgr.meas_graph.add_edge(self.node_label(), filter_obj.node_label(), connector_in=connector_in, connector_out=connector_out)
+        self.pipelineMgr.meas_graph.add_node(filter_obj.hash_val, node_obj=filter_obj)
+        self.pipelineMgr.meas_graph.add_edge(self.hash_val, filter_obj.hash_val, connector_in=connector_in, connector_out=connector_out)
         self.pipelineMgr.session.add(filter_obj)
         return filter_obj
 
@@ -110,7 +115,7 @@ class FilterProxy(NodeMixin, NodeProxy):
         return f"{self.__class__.__name__} {self.label} ({self.qubit_name})"
 
     def __getitem__(self, key):
-        ss = list(self.pipelineMgr.meas_graph.successors(self.node_label()))
+        ss = list(self.pipelineMgr.meas_graph.successors(self.hash_val))
         label_matches = [self.pipelineMgr.meas_graph.nodes[s]['node_obj'] for s in ss if self.pipelineMgr.meas_graph.nodes[s]['node_obj'].label == key]
         class_matches = [self.pipelineMgr.meas_graph.nodes[s]['node_obj'] for s in ss if self.pipelineMgr.meas_graph.nodes[s]['node_obj'].__class__.__name__ == key]
         if len(label_matches) == 1:
@@ -280,17 +285,17 @@ class StreamSelect(NodeMixin, NodeProxy):
         filter_obj.qubit_name  = self.qubit_name
         filter_obj.pipelineMgr = self.pipelineMgr
         # filter_obj.exp         = self.pipeline
-        if self.node_label() not in self.pipelineMgr.meas_graph.nodes():
-            self.pipelineMgr.meas_graph.add_node(self.node_label(), node_obj=self)
-        self.pipelineMgr.meas_graph.add_node(filter_obj.node_label(), node_obj=filter_obj)
-        self.pipelineMgr.meas_graph.add_edge(self.node_label(), filter_obj.node_label(), connector_in=connector_in, connector_out=connector_out)
+        if self.hash_val not in self.pipelineMgr.meas_graph.nodes():
+            self.pipelineMgr.meas_graph.add_node(self.hash_val, node_obj=self)
+        self.pipelineMgr.meas_graph.add_node(filter_obj.hash_val, node_obj=filter_obj)
+        self.pipelineMgr.meas_graph.add_edge(self.hash_val, filter_obj.hash_val, connector_in=connector_in, connector_out=connector_out)
         self.pipelineMgr.session.add(filter_obj)
 
         return filter_obj
 
     def clear_pipeline(self):
         """Remove all nodes coresponding to the qubit"""
-        desc = nx.algorithms.dag.descendants(self.pipelineMgr.meas_graph, str(self))
+        desc = nx.algorithms.dag.descendants(self.pipelineMgr.meas_graph, self.hash_val)
         for n in desc:
             # n.exp = None
             n = self.pipelineMgr.meas_graph.nodes[n]['node_obj']
@@ -319,7 +324,7 @@ class StreamSelect(NodeMixin, NodeProxy):
                 raise Exception("Cannot have averaged stream without averaging?!")
 
     def show_pipeline(self):
-        desc = list(nx.algorithms.dag.descendants(self.pipelineMgr.meas_graph, str(self))) + [str(self)]
+        desc = list(nx.algorithms.dag.descendants(self.pipelineMgr.meas_graph, self.hash_val)) + [self.hash_val]
         subgraph = self.pipelineMgr.meas_graph.subgraph(desc)
         return self.pipelineMgr.show_pipeline(subgraph=subgraph)
 
@@ -336,7 +341,7 @@ class StreamSelect(NodeMixin, NodeProxy):
         return f"StreamSelect for {self.qubit_name}"
 
     def __getitem__(self, key):
-        ss = list(self.pipelineMgr.meas_graph.successors(self.node_label()))
+        ss = list(self.pipelineMgr.meas_graph.successors(self.hash_val))
         label_matches = [self.pipelineMgr.meas_graph.nodes[s]['node_obj'] for s in ss if self.pipelineMgr.meas_graph.nodes[s]['node_obj'].label == key]
         class_matches = [self.pipelineMgr.meas_graph.nodes[s]['node_obj'] for s in ss if self.pipelineMgr.meas_graph.nodes[s]['node_obj'].__class__.__name__ == key]
         if len(label_matches) == 1:
