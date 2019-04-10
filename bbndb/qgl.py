@@ -386,29 +386,13 @@ class AttenuatorChannel(PhysicalChannel, ChannelMixin):
 
 class ReceiverChannel(PhysicalChannel, ChannelMixin):
     '''
-    A trigger input on a receiver.
+    ReceiverChannel denotes the physical receive channel on a transceiver. The
+    actual stream type, and the dsp stream id, are handled by the pipeline.
     '''
     id = Column(Integer, ForeignKey("physicalchannel.id"), primary_key=True)
 
     channel            = Column(Integer, nullable=False)
-    dsp_channel        = Column(Integer)
-    stream_type        = Column(String, default="raw", nullable=False)
-    if_freq            = Column(Float, default=0.0, nullable=False)
-    kernel_data        = Column(LargeBinary) # Binary string of np.complex128
-    kernel_bias        = Column(Float, default=0.0, nullable=False)
-    threshold          = Column(Float, default=0.0, nullable=False)
-    threshold_invert   = Column(Boolean, default=False, nullable=False)
-
     triggering_chan_id = Column(Integer, ForeignKey("measurement.id"))
-
-    def kernel():
-        doc = "The kernel as represented by a numpy complex128 array"
-        def fget(self):
-            return np.frombuffer(self.kernel_data, dtype=np.complex128)
-        def fset(self, value):
-            self.kernel_data = value.astype(np.complex128).tobytes()
-        return locals()
-    kernel = property(**kernel())
 
     def pulse_check(name):
         return name in ["constant", "gaussian", "drag", "gaussOn", "gaussOff", "dragGaussOn", "dragGaussOff",
