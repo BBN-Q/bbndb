@@ -164,10 +164,11 @@ class Demodulate(FilterProxy, NodeMixin):
         return value
 
 class Average(FilterProxy, NodeMixin):
-    """Takes data and collapses along the specified axis."""
-    # Over which axis should averaging take place
+    """Takes data and collapses along the specified axis. Threshold is used for
+    state identification."""
     id = Column(Integer, ForeignKey("filterproxy.id"), primary_key=True)
     axis = Column(String, default="averages")
+    threshold = Column(Float, default=0.5)
 
 class FidelityKernel(FilterProxy, NodeMixin):
     """Calculates the single shot fidelity from given input"""
