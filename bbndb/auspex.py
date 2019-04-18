@@ -8,11 +8,11 @@ from sqlalchemy.orm import relationship, backref, validates
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy import inspect
 from IPython.display import HTML, display
-from . import session #session.Base, Session, engine
+from .session import Base 
 
 __current_pipeline__ = None
 
-class Connection(session.Base):
+class Connection(Base):
     __tablename__ = "connection"
     id            = Column(Integer, primary_key=True)
     node1_id      = Column(Integer, ForeignKey("nodeproxy.id"))
@@ -22,7 +22,7 @@ class Connection(session.Base):
     pipeline_name = Column(String, nullable=False)
     time          = Column(DateTime)
 
-class NodeProxy(session.Base):
+class NodeProxy(Base):
     __tablename__ = "nodeproxy"
     id              = Column(Integer, primary_key=True)
     label           = Column(String)

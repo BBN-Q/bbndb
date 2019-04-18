@@ -3,7 +3,7 @@
 from . import qgl
 from . import auspex
 from . import calibration
-from .session import Session, engine, Base, session_scope, session
+from .session import Session, engine, Base, session_scope, cl_session, pl_session, get_cl_session, get_pl_session, initialize_db
 from sqlalchemy import create_engine
 from sqlalchemy.inspection import inspect
 from sqlalchemy.orm import class_mapper

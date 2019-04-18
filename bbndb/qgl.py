@@ -31,7 +31,7 @@ from sqlalchemy.ext.mutable import Mutable
 from sqlalchemy.orm import relationship, backref, validates
 from sqlalchemy.ext.declarative import declared_attr
 
-from . import session #session.Base, Session, engine
+from .session import Base
 
 class MutableDict(Mutable, dict):
     @classmethod
@@ -70,7 +70,7 @@ class DatabaseItem(object):
     def __str__(self):
         return f"{self.__class__.__name__}('{self.label}')"
 
-class ChannelDatabase(session.Base):
+class ChannelDatabase(Base):
     __tablename__ = "channeldatabase"
     id = Column(Integer, primary_key=True)
 
@@ -95,12 +95,12 @@ class ChannelDatabase(session.Base):
     def __str__(self):
         return f"ChannelDatabase(id={self.id}, label={self.label})"
 
-class Instrument(DatabaseItem, session.Base):
+class Instrument(DatabaseItem, Base):
     model      = Column(String, nullable=False)
     address    = Column(String)
     parameters = Column(MutableDict.as_mutable(PickleType), default={}, nullable=False)
 
-class Attenuator(DatabaseItem, session.Base):
+class Attenuator(DatabaseItem, Base):
     model    = Column(String, nullable=False)
     address  = Column(String)
 
@@ -121,7 +121,7 @@ class Attenuator(DatabaseItem, session.Base):
     def __getitem__(self, value):
         return self.get_chan(value)
 
-class Generator(DatabaseItem, session.Base):
+class Generator(DatabaseItem, Base):
     model            = Column(String, nullable=False)
     address          = Column(String)
     power            = Column(Float, nullable=False)
@@ -133,13 +133,13 @@ class Generator(DatabaseItem, session.Base):
 
     phys_chans = relationship("PhysicalChannel", back_populates="generator")
 
-class SpectrumAnalyzer(DatabaseItem, session.Base):
+class SpectrumAnalyzer(DatabaseItem, Base):
     model     = Column(String, nullable=False)
     address   = Column(String)
     LO_source = relationship("Generator", uselist=False, foreign_keys="[Generator.spectrumanalyzer_id]")
     phys_chans   = relationship("PhysicalChannel", back_populates = 'spectrumanalyzer')
 
-class DCSource(DatabaseItem, session.Base):
+class DCSource(DatabaseItem, Base):
     model     = Column(String, nullable=False)
     address   = Column(String)
     output    = Column(Boolean, default=False)
@@ -148,7 +148,7 @@ class DCSource(DatabaseItem, session.Base):
     pump_source = relationship("Generator", uselist=False, foreign_keys="[Generator.DCsource_id]")
     phys_chans  = relationship('PhysicalChannel', back_populates = 'DCsource')
 
-class Receiver(DatabaseItem, session.Base):
+class Receiver(DatabaseItem, Base):
     """A receiver , or generally an analog to digitial converter"""
     model            = Column(String, nullable=False)
     address          = Column(String)
@@ -196,7 +196,7 @@ class Receiver(DatabaseItem, session.Base):
     def __getitem__(self, value):
         return self.get_chan(value)
 
-class Transmitter(DatabaseItem, session.Base):
+class Transmitter(DatabaseItem, Base):
     """An arbitrary waveform generator, or generally a digital to analog converter"""
     model            = Column(String, nullable=False)
     address          = Column(String)
@@ -234,7 +234,7 @@ class Transmitter(DatabaseItem, session.Base):
     # def __getitem__(self, value):
         # return self.get_chan(value)
 
-class Processor(DatabaseItem, session.Base):
+class Processor(DatabaseItem, Base):
     """A hardware unit used for signal processing, e.g. a TDM"""
     model            = Column(String, nullable=False)
     address          = Column(String)
@@ -243,7 +243,7 @@ class Processor(DatabaseItem, session.Base):
     trigger_interval = Column(Float, default=100e-6, nullable=False)
     trigger_source   = Column(String, default="internal", nullable=False)
 
-class Transceiver(DatabaseItem, session.Base):
+class Transceiver(DatabaseItem, Base):
     """A single machine or rack of a2ds and d2as that we want to treat as a unit."""
     model        = Column(String, nullable=False)
     master       = Column(String)
@@ -272,7 +272,7 @@ class Transceiver(DatabaseItem, session.Base):
         else:
             return matches[0]
 
-class Channel(session.Base):
+class Channel(Base):
     '''
     Every channel has a label and some printers.
     '''
