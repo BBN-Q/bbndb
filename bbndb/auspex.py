@@ -8,7 +8,7 @@ from sqlalchemy.orm import relationship, backref, validates
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy import inspect
 from IPython.display import HTML, display
-from .session import Base 
+from .session import Base
 
 __current_pipeline__ = None
 
@@ -97,12 +97,13 @@ class FilterProxy(NodeMixin, NodeProxy):
         return filter_obj
 
     def drop(self):
-        desc = list(nx.algorithms.dag.descendants(self.pipelineMgr.meas_graph, self))
-        desc.append(self)
-        self.pipelineMgr.meas_graph.remove_nodes_from(desc)
+        desc = list(nx.algorithms.dag.descendants(self.pipelineMgr.meas_graph, str(self)))
+        desc.append(str(self))
         for n in desc:
             # n.exp = None
+            n = self.pipelineMgr.meas_graph.nodes[n]['node_obj']
             self.pipelineMgr.session.expunge(n)
+        self.pipelineMgr.meas_graph.remove_nodes_from(desc)
 
     def node_label(self):
         label = self.label if self.label else ""
@@ -247,7 +248,7 @@ class Buffer(OutputProxy, NodeMixin):
 class StreamSelect(NodeMixin, NodeProxy):
     """docstring for FilterProxy"""
     id = Column(Integer, ForeignKey("nodeproxy.id"), primary_key=True)
-    
+
     dsp_channel = Column(Integer, default=0, nullable=False)
     stream_type = Column(String, default='raw', nullable=False)
     @validates('stream_type')
