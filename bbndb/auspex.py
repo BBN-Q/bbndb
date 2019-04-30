@@ -170,6 +170,11 @@ class Average(FilterProxy, NodeMixin):
     axis = Column(String, default="averages")
     threshold = Column(Float, default=0.5)
 
+class Framer(FilterProxy, NodeMixin):
+    """Emit out data in increments defined by the specified axis."""
+    id = Column(Integer, ForeignKey("filterproxy.id"), primary_key=True)
+    axis = Column(String, nullable=False)
+
 class FidelityKernel(FilterProxy, NodeMixin):
     """Calculates the single shot fidelity from given input"""
     id                       = Column(Integer, ForeignKey("filterproxy.id"), primary_key=True)
