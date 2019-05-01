@@ -25,6 +25,7 @@ import numpy as np
 from math import tan, cos, pi
 from copy import deepcopy
 import datetime
+import json
 
 from sqlalchemy import Column, DateTime, String, Boolean, Float, Integer, LargeBinary, ForeignKey, func, PickleType
 from sqlalchemy.ext.mutable import Mutable
@@ -90,6 +91,22 @@ class ChannelDatabase(Base):
 
     def all_instruments(self):
         return self.generators + self.transmitters + self.receivers + self.transceivers + self.instruments + self.processors + self.attenuators + self.DCSources + self.spectrum_analyzers
+    def serialize(self):
+        d = {c.label: c.__dict__ for c in self.all_instruments() + self.channels}
+        for k in d:
+            d[k].pop("_sa_instance_state", None)
+            d[k].pop("channel_db", None)
+            if "channels" in d[k]:
+                d[k]["channels"] = [c.label for c in d[k]["channels"]] 
+            for kk,v in d[k].items():
+                if hasattr(v, 'label'):
+                    d[k][kk] = v.label
+            for kk in list(d[k].keys()):
+                try:
+                    json.dumps(d[k][kk])
+                except:
+                    d[k].pop(kk)
+        return d
     def __repr__(self):
         return str(self)
     def __str__(self):
