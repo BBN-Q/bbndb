@@ -97,13 +97,15 @@ class FilterProxy(NodeMixin, NodeProxy):
         return filter_obj
 
     def drop(self):
-        desc = list(nx.algorithms.dag.descendants(self.pipelineMgr.meas_graph, self.hash_val))
-        desc.append(self.hash_val)
-        for n in desc:
+        desc_hashes = list(nx.algorithms.dag.descendants(self.pipelineMgr.meas_graph, self.hash_val))
+        desc_hashes.append(self.hash_val)
+        desc_objs = []
+        for n in desc_hashes:
             # n.exp = None
             n = self.pipelineMgr.meas_graph.nodes[n]['node_obj']
+            desc_objs.append(n)
             self.pipelineMgr.session.expunge(n)
-        self.pipelineMgr.meas_graph.remove_nodes_from(desc)
+        self.pipelineMgr.meas_graph.remove_nodes_from(desc_objs+[self])
 
     def node_label(self):
         label = self.label if self.label else ""
