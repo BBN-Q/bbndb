@@ -398,7 +398,7 @@ class ReceiverChannel(PhysicalChannel, ChannelMixin):
     id = Column(Integer, ForeignKey("physicalchannel.id"), primary_key=True)
 
     channel            = Column(Integer, nullable=False)
-    triggering_chan_id = Column(Integer, ForeignKey("measurement.id"))
+    triggering_chan    = relationship("Measurement", backref="receiver_chan", foreign_keys="[Measurement.receiver_chan_id]")
 
     def pulse_check(name):
         return name in ["constant", "gaussian", "drag", "gaussOn", "gaussOff", "dragGaussOn", "dragGaussOff",
@@ -461,7 +461,7 @@ class Measurement(LogicalChannel, ChannelMixin):
     control_chan_id = Column(Integer, ForeignKey("qubit.id"))
 
     trig_chan       = relationship("LogicalMarkerChannel", uselist=False, backref="meas_chan", foreign_keys="[LogicalMarkerChannel.meas_chan_id]")
-    receiver_chan   = relationship("ReceiverChannel", uselist=False, backref="triggering_chan", foreign_keys="[ReceiverChannel.triggering_chan_id]")
+    receiver_chan_id = Column(Integer, ForeignKey("receiverchannel.id"))
     # attenuator_chan = relationship("AttenuatorChannel", uselist=False, backref="measuring_chan", foreign_keys="[AttenuatorChannel.measuring_chan_id]")
 
     @validates('meas_type')
