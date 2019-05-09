@@ -370,6 +370,13 @@ class PhysicalQuadratureChannel(PhysicalChannel, ChannelMixin):
     I_channel_amp_factor = Column(Float, default=1.0, nullable=False)
     Q_channel_amp_factor = Column(Float, default=1.0, nullable=False)
 
+    # mixer correction matrix for APS1
+    @property
+    def correctionT(self):
+        return np.array(
+            [[self.amp_factor, self.amp_factor * tan(self.phase_skew * pi / 180)],
+             [0, 1 / cos(self.phase_skew * pi / 180)]])
+
 class AttenuatorChannel(PhysicalChannel, ChannelMixin):
     """
     Physical Channel on an Attenutator
