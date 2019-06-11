@@ -26,12 +26,20 @@ from math import tan, cos, pi
 from copy import deepcopy
 import datetime
 
-from sqlalchemy import Column, DateTime, String, Boolean, Float, Integer, LargeBinary, ForeignKey, func, PickleType
+from sqlalchemy import Table, Column, DateTime, String, Boolean, Float, Integer, LargeBinary, ForeignKey, func, PickleType
 from sqlalchemy.ext.mutable import Mutable
 from sqlalchemy.orm import relationship, backref, validates
 from sqlalchemy.ext.declarative import declared_attr
+from sqlalchemy import inspect
+
+from IPython.display import HTML, display
 
 from .session import Base
+
+receivers_to_measurements = Table('receivers_to_measurements', Base.metadata,
+    Column('receiver_id', Integer, ForeignKey('receiverchannel.id')),
+    Column('measurement_id', Integer, ForeignKey('measurement.id'))
+)
 
 class MutableDict(Mutable, dict):
     @classmethod
@@ -298,10 +306,30 @@ class ChannelMixin(object):
     @declared_attr
     def __tablename__(cls):
         return cls.__name__.lower()
+    def node_label(self):
+        label = self.label if self.label else ""
+        return f"{self.__class__.__name__} {self.label}"
     def __repr__(self):
         return str(self)
     def __str__(self):
         return f"{self.__class__.__name__}('{self.label}')"
+    def print(self, show=True):
+        table_code = ""
+        label = self.label if self.label else "Unlabeled"
+        inspr = inspect(self)
+        for c in list(self.__mapper__.columns):
+            if c.name not in ["id", "label", "qubit_name", "node_type"]:
+                hist = getattr(inspr.attrs, c.name).history
+                dirty = "Yes" if hist.has_changes() else ""
+                if c.name == "kernel_data":
+                    table_code += f"<tr><td>{c.name}</td><td>Binary Data of length {len(self.kernel)}</td><td>{dirty}</td></tr>"
+                else:
+                    table_code += f"<tr><td>{c.name}</td><td>{getattr(self,c.name)}</td><td>{dirty}</td></tr>"
+        html = f"<b>{self.type}</b> <i>{label}</i></br><table style='{{padding:0.5em;}}'><tr><th>Attribute</th><th>Value</th><th>Changes?</th></tr><tr>{table_code}</tr></table>"
+        if show:
+            display(HTML(html))
+        else:
+            return html
 
 class PhysicalChannel(ChannelMixin, Channel):
     '''
@@ -398,7 +426,7 @@ class ReceiverChannel(PhysicalChannel, ChannelMixin):
     id = Column(Integer, ForeignKey("physicalchannel.id"), primary_key=True)
 
     channel          = Column(Integer, nullable=False)
-    triggering_chans = relationship("Measurement", backref="receiver_chan", foreign_keys="[Measurement.receiver_chan_id]")
+    # triggering_chans = relationship("Measurement", backref="receiver_chan", foreign_keys="[Measurement.receiver_chan_id]")
 
     def pulse_check(name):
         return name in ["constant", "gaussian", "drag", "gaussOn", "gaussOff", "dragGaussOn", "dragGaussOff",
@@ -460,8 +488,9 @@ class Measurement(LogicalChannel, ChannelMixin):
 
     control_chan_id = Column(Integer, ForeignKey("qubit.id"))
 
-    trig_chan        = relationship("LogicalMarkerChannel", uselist=False, backref="meas_chan", foreign_keys="[LogicalMarkerChannel.meas_chan_id]")
-    receiver_chan_id = Column(Integer, ForeignKey("receiverchannel.id"))
+    trig_chan       = relationship("LogicalMarkerChannel", uselist=False, backref="meas_chan", foreign_keys="[LogicalMarkerChannel.meas_chan_id]")
+    receiver_chans  = relationship("ReceiverChannel", backref="measure_chans", secondary=receivers_to_measurements)
+    # Column(Integer, ForeignKey("receiverchannel.id"))
 
     @validates('meas_type')
     def validate_meas_type(self, key, source):
