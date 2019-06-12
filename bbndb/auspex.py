@@ -249,6 +249,9 @@ class StreamSelect(NodeMixin, NodeProxy):
     """docstring for FilterProxy"""
     id = Column(Integer, ForeignKey("nodeproxy.id"), primary_key=True)
 
+    # This is the point at which the channel library and pipeline are mixed!
+    receiver_channel_name = Column(String, nullable=False)
+
     dsp_channel = Column(Integer, default=0, nullable=False)
     stream_type = Column(String, default='raw', nullable=False)
     @validates('stream_type')
