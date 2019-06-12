@@ -309,24 +309,25 @@ class StreamSelect(NodeMixin, NodeProxy):
             self.pipelineMgr.session.expunge(n)
         self.pipelineMgr.meas_graph.remove_nodes_from(desc)
 
-    def create_default_pipeline(self, average=True, buffers=False):
+    def create_default_pipeline(self, average=True, buffers=False, output_suffix=""):
         Output = Buffer if buffers else Write
+        output_filt = Output(groupname=f"{self.qubit_name}-main{output_suffix}")
         if average:
             if self.stream_type.lower() == "raw":
-                self.add(Demodulate()).add(Integrate()).add(Average()).add(Output(groupname=self.qubit_name+'-main'))
+                self.add(Demodulate()).add(Integrate()).add(Average()).add(output_filt)
             if self.stream_type.lower() == "demodulated":
-                self.add(Integrate()).add(Average()).add(Output(groupname=self.qubit_name+'-main'))
+                self.add(Integrate()).add(Average()).add(output_filt)
             if self.stream_type.lower() == "integrated":
-                self.add(Average()).add(Output(groupname=self.qubit_name+'-main'))
+                self.add(Average()).add(output_filt)
             if self.stream_type.lower() == "averaged":
-                self.add(Output(groupname=self.qubit_name+'-main'))
+                self.add(output_filt)
         else:
             if self.stream_type.lower() == "raw":
-                self.add(Demodulate()).add(Integrate()).add(Output(groupname=self.qubit_name+'-main'))
+                self.add(Demodulate()).add(Integrate()).add(output_filt)
             if self.stream_type.lower() == "demodulated":
-                self.add(Integrate()).add(Output(groupname=self.qubit_name+'-main'))
+                self.add(Integrate()).add(output_filt)
             if self.stream_type.lower() == "integrated":
-                self.add(Output(groupname=self.qubit_name+'-main'))
+                self.add(output_filt)
             if self.stream_type.lower() == "averaged":
                 raise Exception("Cannot have averaged stream without averaging?!")
 
@@ -342,10 +343,10 @@ class StreamSelect(NodeMixin, NodeProxy):
         return self.__repr__()
 
     def __repr__(self):
-        return f"StreamSelect for {self.qubit_name}"
+        return f"StreamSelect for {self.qubit_name} receiver channel {self.receiver_channel_name}"
 
     def __str__(self):
-        return f"StreamSelect for {self.qubit_name}"
+        return f"StreamSelect for {self.qubit_name} receiver channel {self.receiver_channel_name}"
 
     def __getitem__(self, key):
         ss = list(self.pipelineMgr.meas_graph.successors(self.hash_val))
