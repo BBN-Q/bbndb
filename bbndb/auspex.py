@@ -176,6 +176,11 @@ class Framer(FilterProxy, NodeMixin):
     id = Column(Integer, ForeignKey("filterproxy.id"), primary_key=True)
     axis = Column(String, nullable=False)
 
+
+class IQMerger(FilterProxy, NodeMixin):
+    """docstring for FilterProxy"""
+    id = Column(Integer, ForeignKey("filterproxy.id"), primary_key=True)
+
 class FidelityKernel(FilterProxy, NodeMixin):
     """Calculates the single shot fidelity from given input"""
     id                       = Column(Integer, ForeignKey("filterproxy.id"), primary_key=True)
