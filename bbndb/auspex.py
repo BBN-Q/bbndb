@@ -313,18 +313,18 @@ class StreamSelect(NodeMixin, NodeProxy):
         Output = Buffer if buffers else Write
         if average:
             if self.stream_type.lower() == "raw":
-                self.add(Demodulate()).add(Integrate()).add(Average()).add(Output(groupname=self.qubit_name+'-main'))
+                self.add(Demodulate()).add(Integrate()).add(Average()).add(Output(groupname=self.qubit_name+'-raw_int'))
             if self.stream_type.lower() == "demodulated":
-                self.add(Integrate()).add(Average()).add(Output(groupname=self.qubit_name+'-main'))
+                self.add(Integrate()).add(Average()).add(Output(groupname=self.qubit_name+'-demod_int'))
             if self.stream_type.lower() == "integrated":
                 self.add(Average()).add(Output(groupname=self.qubit_name+'-main'))
             if self.stream_type.lower() == "averaged":
-                self.add(Output(groupname=self.qubit_name+'-main'))
+                self.add(Output(groupname=self.qubit_name+'-avg'))
         else:
             if self.stream_type.lower() == "raw":
-                self.add(Demodulate()).add(Integrate()).add(Output(groupname=self.qubit_name+'-main'))
+                self.add(Demodulate()).add(Integrate()).add(Output(groupname=self.qubit_name+'-raw_int'))
             if self.stream_type.lower() == "demodulated":
-                self.add(Integrate()).add(Output(groupname=self.qubit_name+'-main'))
+                self.add(Integrate()).add(Output(groupname=self.qubit_name+'-demod_int'))
             if self.stream_type.lower() == "integrated":
                 self.add(Output(groupname=self.qubit_name+'-main'))
             if self.stream_type.lower() == "averaged":
