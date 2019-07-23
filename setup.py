@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='bbndb',
-    version='2019.1.2',
+    version='2019.1',
     author='Graham Rowlands',
     scripts=[],
     packages=['bbndb'],
