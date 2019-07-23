@@ -1,4 +1,5 @@
 import numpy as np
+import os
 from copy import deepcopy
 import datetime
 import networkx as nx
@@ -264,14 +265,30 @@ class StreamSelect(NodeMixin, NodeProxy):
     threshold_invert   = Column(Boolean, default=False, nullable=False)
 
     def kernel():
-        doc = "The kernel as represented by a numpy complex128 array"
+        doc = "The kernel as represented by a numpy complex128 array, or the name of a kernel file."
         def fget(self):
             if self.kernel_data:
                 return np.frombuffer(self.kernel_data, dtype=np.complex128)
             else:
                 return np.empty((0,), dtype=np.complex128)
         def fset(self, value):
-            self.kernel_data = value.astype(np.complex128).tobytes()
+            if isinstance(value, np.ndarray):
+                self.kernel_data = value.astype(np.complex128).tobytes()
+            elif isinstance(value, str):
+                try:
+                    from auspex.config import KernelDir
+                except ImportError:
+                    KernelDir = "./"
+                    logger.warning("Could not load auspex config, loading kernel from current directory.")
+                kpath = os.path.join(KernelDir, value)
+                if os.path.exists(kpath):
+                    kdata = np.loadtxt(kpath, dtype=complex,
+                        converters={0: lambda s: complex(s.decode().replace('+-', '-'))})
+                    self.kernel_data = kdata.astype(np.complex128).tobytes()
+                else:
+                    raise ValueError(f"Unable to open kernel file: {kpath}.")
+            else:
+                raise ValueError(f"Unable to load kernel for stream selector {self.id} -- please provide a path or numpy array.")
         return locals()
     kernel = property(**kernel())
 
