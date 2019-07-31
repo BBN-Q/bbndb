@@ -99,7 +99,7 @@ class FilterProxy(NodeMixin, NodeProxy):
 
     def drop(self):
         desc = list(nx.algorithms.dag.descendants(self.pipelineMgr.meas_graph, self.hash_val))
-        desc.append(drlg.hash_val)
+        desc.append(self.hash_val)
         for n in desc:
             # n.exp = None
             n = self.pipelineMgr.meas_graph.nodes[n]['node_obj']
