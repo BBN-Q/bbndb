@@ -255,7 +255,7 @@ class Transceiver(DatabaseItem, Base):
     """A single machine or rack of a2ds and d2as that we want to treat as a unit."""
     model        = Column(String, nullable=False)
     master       = Column(String)
-    address      = Column(String,nullable=False)
+    address      = Column(String, nullable=False)
     initialize_separately = Column(Boolean, default=True, nullable=False)
     receivers    = relationship("Receiver", backref="transceiver")
     transmitters = relationship("Transmitter", backref="transceiver")
@@ -405,7 +405,7 @@ class PhysicalQuadratureChannel(PhysicalChannel, ChannelMixin):
     Q_channel_amp_factor = Column(Float, default=1.0, nullable=False)
     attenuation          = Column(Float, default=0.0, nullable=False)
     channel              = Column(Integer, nullable=False)
-    sequence_file        = Column(String, default="")
+    sequence_file        = Column(String)
 
 class AttenuatorChannel(PhysicalChannel, ChannelMixin):
     """
@@ -490,7 +490,6 @@ class Measurement(LogicalChannel, ChannelMixin):
 
     trig_chan       = relationship("LogicalMarkerChannel", uselist=False, backref="meas_chan", foreign_keys="[LogicalMarkerChannel.meas_chan_id]")
     receiver_chans  = relationship("ReceiverChannel", backref="measure_chans", secondary=receivers_to_measurements)
-    # Column(Integer, ForeignKey("receiverchannel.id"))
 
     @validates('meas_type')
     def validate_meas_type(self, key, source):
