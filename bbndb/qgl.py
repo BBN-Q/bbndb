@@ -212,7 +212,6 @@ class Transmitter(DatabaseItem, Base):
     trigger_source   = Column(String, default="external", nullable=False)
     delay            = Column(Float, default=0.0, nullable=False)
     master           = Column(Boolean, default=False, nullable=False)
-    sequence_file    = Column(String)
     transceiver_id   = Column(Integer, ForeignKey("transceiver.id"))
 
     channels = relationship("PhysicalChannel", back_populates="transmitter", cascade="all, delete, delete-orphan")

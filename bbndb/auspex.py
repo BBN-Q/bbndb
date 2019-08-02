@@ -1,4 +1,5 @@
 import numpy as np
+import os
 from copy import deepcopy
 import datetime
 import networkx as nx
@@ -97,8 +98,8 @@ class FilterProxy(NodeMixin, NodeProxy):
         return filter_obj
 
     def drop(self):
-        desc = list(nx.algorithms.dag.descendants(self.pipelineMgr.meas_graph, str(self.hash_val)))
-        desc.append(str(self.hash_val))
+        desc = list(nx.algorithms.dag.descendants(self.pipelineMgr.meas_graph, self.hash_val))
+        desc.append(self.hash_val)
         for n in desc:
             # n.exp = None
             n = self.pipelineMgr.meas_graph.nodes[n]['node_obj']
@@ -255,7 +256,7 @@ class StreamSelect(NodeMixin, NodeProxy):
     id = Column(Integer, ForeignKey("nodeproxy.id"), primary_key=True)
 
     # This is the point at which the channel library and pipeline are mixed!
-    receiver_channel_name = Column(String, nullable=False)
+    receiver_channel_name = Column(String)
 
     dsp_channel = Column(Integer, default=0, nullable=False)
     stream_type = Column(String, default='raw', nullable=False)
@@ -272,14 +273,30 @@ class StreamSelect(NodeMixin, NodeProxy):
     threshold_invert   = Column(Boolean, default=False, nullable=False)
 
     def kernel():
-        doc = "The kernel as represented by a numpy complex128 array"
+        doc = "The kernel as represented by a numpy complex128 array, or the name of a kernel file."
         def fget(self):
             if self.kernel_data:
                 return np.frombuffer(self.kernel_data, dtype=np.complex128)
             else:
                 return np.empty((0,), dtype=np.complex128)
         def fset(self, value):
-            self.kernel_data = value.astype(np.complex128).tobytes()
+            if isinstance(value, np.ndarray):
+                self.kernel_data = value.astype(np.complex128).tobytes()
+            elif isinstance(value, str):
+                try:
+                    from auspex.config import KernelDir
+                except ImportError:
+                    KernelDir = "./"
+                    logger.warning("Could not load auspex config, loading kernel from current directory.")
+                kpath = os.path.join(KernelDir, value)
+                if os.path.exists(kpath):
+                    kdata = np.loadtxt(kpath, dtype=complex,
+                        converters={0: lambda s: complex(s.decode().replace('+-', '-'))})
+                    self.kernel_data = kdata.astype(np.complex128).tobytes()
+                else:
+                    raise ValueError(f"Unable to open kernel file: {kpath}.")
+            else:
+                raise ValueError(f"Unable to load kernel for stream selector {self.id} -- please provide a path or numpy array.")
         return locals()
     kernel = property(**kernel())
 
@@ -319,23 +336,22 @@ class StreamSelect(NodeMixin, NodeProxy):
 
     def create_default_pipeline(self, average=True, buffers=False, output_suffix=""):
         Output = Buffer if buffers else Write
-        output_filt = Output(groupname=f"{self.qubit_name}-main{output_suffix}")
         if average:
             if self.stream_type.lower() == "raw":
-                self.add(Demodulate(label=f"Demodulate {self.qubit_name}")).add(Integrate()).add(Average()).add(output_filt)
+                self.add(Demodulate(label=f"Demodulate {self.qubit_name}")).add(Integrate()).add(Average()).add(Output(groupname=self.qubit_name+'-raw_int'))
             if self.stream_type.lower() == "demodulated":
-                self.add(Integrate()).add(Average()).add(output_filt)
+                self.add(Integrate()).add(Average()).add(Output(groupname=self.qubit_name+'-demod_int'))
             if self.stream_type.lower() == "integrated":
-                self.add(Average()).add(output_filt)
+                self.add(Average()).add(Output(groupname=self.qubit_name+'-main'))
             if self.stream_type.lower() == "averaged":
-                self.add(output_filt)
+                self.add(Output(groupname=self.qubit_name+'-avg'))
         else:
             if self.stream_type.lower() == "raw":
-                self.add(Demodulate()).add(Integrate()).add(output_filt)
+                self.add(Demodulate()).add(Integrate()).add(Output(groupname=self.qubit_name+'-raw_int'))
             if self.stream_type.lower() == "demodulated":
-                self.add(Integrate()).add(output_filt)
+                self.add(Integrate()).add(Output(groupname=self.qubit_name+'-demod_int'))
             if self.stream_type.lower() == "integrated":
-                self.add(output_filt)
+                self.add(Output(groupname=self.qubit_name+'-main'))
             if self.stream_type.lower() == "averaged":
                 raise Exception("Cannot have averaged stream without averaging?!")
 
