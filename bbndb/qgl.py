@@ -200,12 +200,30 @@ class Transmitter(DatabaseItem, Base):
     """An arbitrary waveform generator, or generally a digital to analog converter"""
     model            = Column(String, nullable=False)
     address          = Column(String)
+
     trigger_interval = Column(Float, default=100e-6, nullable=False)
     trigger_source   = Column(String, default="external", nullable=False)
     delay            = Column(Float, default=0.0, nullable=False)
     master           = Column(Boolean, default=False, nullable=False)
     sequence_file    = Column(String)
     transceiver_id   = Column(Integer, ForeignKey("transceiver.id"))
+
+    # Things only needed for APS3
+    serial_port      = Column(String)
+    soft_trigger     = Column(Boolean, default=False)
+    bypass_modulator = Column(Boolean, default=False)
+    bypass_nco       = Column(Boolean, default=False)
+    dac_output_mux   = Column(String, default=True)
+    trigger_output_select = Column(Boolean, default=False)
+    marker_delay     = Column(Float, default=0.0)
+    dac_switch_mode  = Column(String, default="MIX")
+    dac_full_scale_current = Column(Float, default=40.0)
+    dac_nco_enable   = Column(Boolean, default=False)
+    dac_FIR85_enable = Column(Boolean, default=False)
+    dac_nco_frequency = Column(Float, default=0.0)
+    dac_pll_reference = Column(String, default='REF IN')
+    dac_shuffle_mode = Column(Integer, default=0)
+
 
     channels = relationship("PhysicalChannel", back_populates="transmitter", cascade="all, delete, delete-orphan")
 
