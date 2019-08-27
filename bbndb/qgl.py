@@ -76,6 +76,7 @@ class ChannelDatabase(Base):
 
     label        = Column(String, nullable=False)
     time         = Column(DateTime)
+    notes        = Column(String)
 
     channels           = relationship("Channel", backref="channel_db", cascade="all, delete, delete-orphan")
     generators         = relationship("Generator", backref="channel_db", cascade="all, delete, delete-orphan")
