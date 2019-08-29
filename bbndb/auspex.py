@@ -327,10 +327,15 @@ class StreamSelect(NodeMixin, NodeProxy):
         self.pipelineMgr.meas_graph.remove_nodes_from(desc)
 
     def create_default_pipeline(self, average=True, buffers=False):
+        def filter_label(name):
+            return self.qubit_name + '-' + name
         Output = Buffer if buffers else Write
         if average:
             if self.stream_type.lower() == "raw":
-                self.add(Demodulate()).add(Integrate()).add(Average()).add(Output(groupname=self.qubit_name+'-main'))
+                self.add(Demodulate(label=filter_label("demod"))) \
+                    .add(Integrate(label=filter_label("integrate"))) \
+                    .add(Average(label=filter_label("average"))) \
+                    .add(Output(label =filter_label("output"), groupname=self.qubit_name+'-main'))
             if self.stream_type.lower() == "demodulated":
                 self.add(Integrate()).add(Average()).add(Output(groupname=self.qubit_name+'-main'))
             if self.stream_type.lower() == "integrated":
