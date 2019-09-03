@@ -330,7 +330,7 @@ class StreamSelect(NodeMixin, NodeProxy):
         Output = Buffer if buffers else Write
         if average:
             if self.stream_type.lower() == "raw":
-                self.add(Demodulate()).add(Integrate()).add(Average()).add(Output(groupname=self.qubit_name+'-raw_int'))
+                self.add(Demodulate(label=f"Demodulate {self.qubit_name}")).add(Integrate()).add(Average()).add(Output(groupname=self.qubit_name+'-raw_int'))
             if self.stream_type.lower() == "demodulated":
                 self.add(Integrate()).add(Average()).add(Output(groupname=self.qubit_name+'-demod_int'))
             if self.stream_type.lower() == "integrated":
