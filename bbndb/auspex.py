@@ -98,8 +98,8 @@ class FilterProxy(NodeMixin, NodeProxy):
         return filter_obj
 
     def drop(self):
-        desc = list(nx.algorithms.dag.descendants(self.pipelineMgr.meas_graph, str(self)))
-        desc.append(str(self))
+        desc = list(nx.algorithms.dag.descendants(self.pipelineMgr.meas_graph, str(self.hash_val)))
+        desc.append(str(self.hash_val))
         for n in desc:
             # n.exp = None
             n = self.pipelineMgr.meas_graph.nodes[n]['node_obj']
@@ -330,7 +330,7 @@ class StreamSelect(NodeMixin, NodeProxy):
         Output = Buffer if buffers else Write
         if average:
             if self.stream_type.lower() == "raw":
-                self.add(Demodulate()).add(Integrate()).add(Average()).add(Output(groupname=self.qubit_name+'-raw_int'))
+                self.add(Demodulate(label=f"Demodulate {self.qubit_name}")).add(Integrate()).add(Average()).add(Output(groupname=self.qubit_name+'-raw_int'))
             if self.stream_type.lower() == "demodulated":
                 self.add(Integrate()).add(Average()).add(Output(groupname=self.qubit_name+'-demod_int'))
             if self.stream_type.lower() == "integrated":
