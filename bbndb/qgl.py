@@ -204,6 +204,7 @@ class Transmitter(DatabaseItem, Base):
     trigger_source   = Column(String, default="external", nullable=False)
     delay            = Column(Float, default=0.0, nullable=False)
     master           = Column(Boolean, default=False, nullable=False)
+    sequence_file    = Column(String)
     transceiver_id   = Column(Integer, ForeignKey("transceiver.id"))
 
     channels = relationship("PhysicalChannel", back_populates="transmitter", cascade="all, delete, delete-orphan")
@@ -359,6 +360,7 @@ class PhysicalMarkerChannel(PhysicalChannel, ChannelMixin):
 
     gate_buffer    = Column(Float, default=0.0, nullable=False)
     gate_min_width = Column(Float, default=0.0, nullable=False)
+    sequence_file  = Column(String)
     channel        = Column(Integer, nullable=False)
 
 class PhysicalQuadratureChannel(PhysicalChannel, ChannelMixin):
@@ -375,6 +377,7 @@ class PhysicalQuadratureChannel(PhysicalChannel, ChannelMixin):
     Q_channel_amp_factor = Column(Float, default=1.0, nullable=False)
     attenuation          = Column(Float, default=0.0, nullable=False)
     channel              = Column(Integer, nullable=False)
+    sequence_file        = Column(String)
 
 class AttenuatorChannel(PhysicalChannel, ChannelMixin):
     """
