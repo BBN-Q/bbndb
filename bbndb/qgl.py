@@ -243,6 +243,22 @@ class Processor(DatabaseItem, Base):
     master           = Column(Boolean, default=False, nullable=False)
     trigger_interval = Column(Float, default=100e-6, nullable=False)
     trigger_source   = Column(String, default="internal", nullable=False)
+    channels         = relationship("DigitalInput", back_populates="processor", cascade="all, delete, delete-orphan")
+
+    def get_chan(self, name):
+        if isinstance(name, int):
+            name = f"-{name}"
+        matches = [c for c in self.channels if c.label.endswith(name)]
+        if len(matches) == 0:
+            raise ValueError(f"Could not find an input channel name on processor {self.label} ending with {name}")
+        elif len(matches) > 1:
+            raise ValueError(f"Found {len(matches)} matches for input channels on processor {self.label} whose names end with {name}")
+        else:
+            return matches[0]
+    def ch(self, name):
+        return self.get_chan(name)
+    def __getitem__(self, value):
+        return self.get_chan(value)
 
 class Transceiver(DatabaseItem, Base):
     """A single machine or rack of a2ds and d2as that we want to treat as a unit."""
@@ -258,7 +274,7 @@ class Transceiver(DatabaseItem, Base):
         return self.get_thing("transmitters", name)
 
     def rx(self, name):
-        return self.get_thing("receviers", name)
+        return self.get_thing("receivers", name)
 
     def px(self, name):
         return self.get_thing("processors", name)
@@ -364,6 +380,17 @@ class PhysicalMarkerChannel(PhysicalChannel, ChannelMixin):
     sequence_file  = Column(String)
     channel        = Column(Integer, nullable=False)
 
+class DigitalInput(PhysicalChannel, ChannelMixin):
+    '''
+    A digital input channel on a Processor.
+    '''
+    id = Column(Integer, ForeignKey("physicalchannel.id"), primary_key=True)
+    channel       = Column(Integer, nullable=False)
+
+    processor_id   = Column(Integer, ForeignKey("processor.id"))
+    meas_chan_id = Column(Integer, ForeignKey("measurement.id"))
+    processor    = relationship("Processor", back_populates="channels")
+
 class PhysicalQuadratureChannel(PhysicalChannel, ChannelMixin):
     '''
     Something used to implement a standard qubit channel with two analog channels and a microwave gating channel.
@@ -452,7 +479,7 @@ class Measurement(LogicalChannel, ChannelMixin):
     autodyne which needs an IQ pair or hetero/homodyne which needs just a marker channel.
         meas_type: Type of measurement (autodyne, homodyne)
         autodyne_freq: use to bake the modulation into the pulse, so that it has constant phase
-        frequency: use to asssociate modulation with the channel
+        frequency: use to associate modulation with the channel
     '''
     id = Column(Integer, ForeignKey("logicalchannel.id"), primary_key=True)
 
@@ -463,7 +490,14 @@ class Measurement(LogicalChannel, ChannelMixin):
 
     trig_chan       = relationship("LogicalMarkerChannel", uselist=False, backref="meas_chan", foreign_keys="[LogicalMarkerChannel.meas_chan_id]")
     receiver_chan   = relationship("ReceiverChannel", uselist=False, backref="triggering_chan", foreign_keys="[ReceiverChannel.triggering_chan_id]")
+    processor_chan        = relationship("DigitalInput", uselist=False, backref='input_chan', foreign_keys="DigitalInput.meas_chan_id")
+
     # attenuator_chan = relationship("AttenuatorChannel", uselist=False, backref="measuring_chan", foreign_keys="[AttenuatorChannel.measuring_chan_id]")
+    @validates('frequency')
+    def validate_frequency(self, key, value):
+        if value!=0 and self.meas_type == 'autodyne':
+            warnings.warn('Setting modulation frequency for an autodyne measurement. Are you sure you don\'t want to set autodyne_freq instead?')
+        return value
 
     @validates('meas_type')
     def validate_meas_type(self, key, source):
