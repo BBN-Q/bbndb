@@ -242,7 +242,7 @@ class Processor(DatabaseItem, Base):
         master: true if trigger master (boolean)
         trigger_interval: (s)
         trigger_source: internal / external (string)
-        channels: digital inputs (typically carrying the results of qubit state assignment)
+        channels: digital inputs (typically carrying the results of qubit state assignment). Used to map meas. results into memory (see QGL.PulsePrimitives.MEASA)
     """
     model            = Column(String, nullable=False)
     address          = Column(String)
