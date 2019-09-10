@@ -236,7 +236,14 @@ class Transmitter(DatabaseItem, Base):
         # return self.get_chan(value)
 
 class Processor(DatabaseItem, Base):
-    """A hardware unit used for signal processing, e.g. a TDM"""
+    """A hardware unit used for signal processing, e.g. a TDM
+        model: currently TDM is the only supported model
+        address: instrument address (string)
+        master: true if trigger master (boolean)
+        trigger_interval: (s)
+        trigger_source: internal / external (string)
+        channels: digital inputs (typically carrying the results of qubit state assignment)
+    """
     model            = Column(String, nullable=False)
     address          = Column(String)
     transceiver_id   = Column(Integer, ForeignKey("transceiver.id"))
