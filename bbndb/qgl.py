@@ -31,7 +31,7 @@ from sqlalchemy.ext.mutable import Mutable
 from sqlalchemy.orm import relationship, backref, validates
 from sqlalchemy.ext.declarative import declared_attr
 
-from . import session #session.Base, Session, engine
+from .session import Base
 
 class MutableDict(Mutable, dict):
     @classmethod
@@ -70,12 +70,13 @@ class DatabaseItem(object):
     def __str__(self):
         return f"{self.__class__.__name__}('{self.label}')"
 
-class ChannelDatabase(session.Base):
+class ChannelDatabase(Base):
     __tablename__ = "channeldatabase"
     id = Column(Integer, primary_key=True)
 
     label        = Column(String, nullable=False)
     time         = Column(DateTime)
+    notes        = Column(String)
 
     channels           = relationship("Channel", backref="channel_db", cascade="all, delete, delete-orphan")
     generators         = relationship("Generator", backref="channel_db", cascade="all, delete, delete-orphan")
@@ -95,12 +96,12 @@ class ChannelDatabase(session.Base):
     def __str__(self):
         return f"ChannelDatabase(id={self.id}, label={self.label})"
 
-class Instrument(DatabaseItem, session.Base):
+class Instrument(DatabaseItem, Base):
     model      = Column(String, nullable=False)
     address    = Column(String)
     parameters = Column(MutableDict.as_mutable(PickleType), default={}, nullable=False)
 
-class Attenuator(DatabaseItem, session.Base):
+class Attenuator(DatabaseItem, Base):
     model    = Column(String, nullable=False)
     address  = Column(String)
 
@@ -121,7 +122,7 @@ class Attenuator(DatabaseItem, session.Base):
     def __getitem__(self, value):
         return self.get_chan(value)
 
-class Generator(DatabaseItem, session.Base):
+class Generator(DatabaseItem, Base):
     model            = Column(String, nullable=False)
     address          = Column(String)
     power            = Column(Float, nullable=False)
@@ -133,19 +134,22 @@ class Generator(DatabaseItem, session.Base):
 
     phys_chans = relationship("PhysicalChannel", back_populates="generator")
 
-class SpectrumAnalyzer(DatabaseItem, session.Base):
+class SpectrumAnalyzer(DatabaseItem, Base):
     model     = Column(String, nullable=False)
     address   = Column(String)
     LO_source = relationship("Generator", uselist=False, foreign_keys="[Generator.spectrumanalyzer_id]")
     phys_chans   = relationship("PhysicalChannel", back_populates = 'spectrumanalyzer')
 
-class DCSource(DatabaseItem, session.Base):
+class DCSource(DatabaseItem, Base):
     model     = Column(String, nullable=False)
     address   = Column(String)
+    output    = Column(Boolean, default=False)
+    level     = Column(Float, default=0)
+    mode      = Column(String, default='current')
     pump_source = relationship("Generator", uselist=False, foreign_keys="[Generator.DCsource_id]")
     phys_chans  = relationship('PhysicalChannel', back_populates = 'DCsource')
 
-class Receiver(DatabaseItem, session.Base):
+class Receiver(DatabaseItem, Base):
     """A receiver , or generally an analog to digitial converter"""
     model            = Column(String, nullable=False)
     address          = Column(String)
@@ -160,8 +164,7 @@ class Receiver(DatabaseItem, session.Base):
     transceiver_id   = Column(Integer, ForeignKey("transceiver.id"))
     acquire_mode     = Column(String, default="digitizer", nullable=False)
     reference        = Column(String, default="external")
-    vertical_scale   = Column(Float, default=1, nullable=False)
-
+    stream_sel       = Column(String, nullable = False)
     channels = relationship("PhysicalChannel", back_populates="receiver", cascade="all, delete, delete-orphan")
 
     @validates('acquire_mode')
@@ -194,7 +197,7 @@ class Receiver(DatabaseItem, session.Base):
     def __getitem__(self, value):
         return self.get_chan(value)
 
-class Transmitter(DatabaseItem, session.Base):
+class Transmitter(DatabaseItem, Base):
     """An arbitrary waveform generator, or generally a digital to analog converter"""
     model            = Column(String, nullable=False)
     address          = Column(String)
@@ -232,20 +235,44 @@ class Transmitter(DatabaseItem, session.Base):
     # def __getitem__(self, value):
         # return self.get_chan(value)
 
-class Processor(DatabaseItem, session.Base):
-    """A hardware unit used for signal processing, e.g. a TDM"""
+class Processor(DatabaseItem, Base):
+    """A hardware unit used for signal processing, e.g. a TDM
+        model: currently TDM is the only supported model
+        address: instrument address (string)
+        master: true if trigger master (boolean)
+        trigger_interval: (s)
+        trigger_source: internal / external (string)
+        channels: digital inputs (typically carrying the results of qubit state assignment). Used to map meas. results into memory (see QGL.PulsePrimitives.MEASA)
+    """
     model            = Column(String, nullable=False)
     address          = Column(String)
     transceiver_id   = Column(Integer, ForeignKey("transceiver.id"))
     master           = Column(Boolean, default=False, nullable=False)
     trigger_interval = Column(Float, default=100e-6, nullable=False)
     trigger_source   = Column(String, default="internal", nullable=False)
+    channels         = relationship("DigitalInput", back_populates="processor", cascade="all, delete, delete-orphan")
 
-class Transceiver(DatabaseItem, session.Base):
+    def get_chan(self, name):
+        if isinstance(name, int):
+            name = f"-{name}"
+        matches = [c for c in self.channels if c.label.endswith(name)]
+        if len(matches) == 0:
+            raise ValueError(f"Could not find an input channel name on processor {self.label} ending with {name}")
+        elif len(matches) > 1:
+            raise ValueError(f"Found {len(matches)} matches for input channels on processor {self.label} whose names end with {name}")
+        else:
+            return matches[0]
+    def ch(self, name):
+        return self.get_chan(name)
+    def __getitem__(self, value):
+        return self.get_chan(value)
+
+class Transceiver(DatabaseItem, Base):
     """A single machine or rack of a2ds and d2as that we want to treat as a unit."""
     model        = Column(String, nullable=False)
     master       = Column(String)
-
+    address      = Column(String,nullable=False)
+    initialize_separately = Column(Boolean, default=True, nullable=False)
     receivers    = relationship("Receiver", backref="transceiver")
     transmitters = relationship("Transmitter", backref="transceiver")
     processors   = relationship("Processor", backref="transceiver")
@@ -254,7 +281,7 @@ class Transceiver(DatabaseItem, session.Base):
         return self.get_thing("transmitters", name)
 
     def rx(self, name):
-        return self.get_thing("receviers", name)
+        return self.get_thing("receivers", name)
 
     def px(self, name):
         return self.get_thing("processors", name)
@@ -270,7 +297,7 @@ class Transceiver(DatabaseItem, session.Base):
         else:
             return matches[0]
 
-class Channel(session.Base):
+class Channel(Base):
     '''
     Every channel has a label and some printers.
     '''
@@ -357,6 +384,19 @@ class PhysicalMarkerChannel(PhysicalChannel, ChannelMixin):
 
     gate_buffer    = Column(Float, default=0.0, nullable=False)
     gate_min_width = Column(Float, default=0.0, nullable=False)
+    sequence_file  = Column(String)
+    channel        = Column(Integer, nullable=False)
+
+class DigitalInput(PhysicalChannel, ChannelMixin):
+    '''
+    A digital input channel on a Processor.
+    '''
+    id = Column(Integer, ForeignKey("physicalchannel.id"), primary_key=True)
+    channel       = Column(Integer, nullable=False)
+
+    processor_id   = Column(Integer, ForeignKey("processor.id"))
+    meas_chan_id = Column(Integer, ForeignKey("measurement.id"))
+    processor    = relationship("Processor", back_populates="channels")
 
 class PhysicalQuadratureChannel(PhysicalChannel, ChannelMixin):
     '''
@@ -370,6 +410,9 @@ class PhysicalQuadratureChannel(PhysicalChannel, ChannelMixin):
     Q_channel_offset     = Column(Float, default=0.0, nullable=False)
     I_channel_amp_factor = Column(Float, default=1.0, nullable=False)
     Q_channel_amp_factor = Column(Float, default=1.0, nullable=False)
+    attenuation          = Column(Float, default=0.0, nullable=False)
+    channel              = Column(Integer, nullable=False)
+    sequence_file        = Column(String, default="")
 
 class AttenuatorChannel(PhysicalChannel, ChannelMixin):
     """
@@ -384,29 +427,13 @@ class AttenuatorChannel(PhysicalChannel, ChannelMixin):
 
 class ReceiverChannel(PhysicalChannel, ChannelMixin):
     '''
-    A trigger input on a receiver.
+    ReceiverChannel denotes the physical receive channel on a transceiver. The
+    actual stream type, and the dsp stream id, are handled by the pipeline.
     '''
     id = Column(Integer, ForeignKey("physicalchannel.id"), primary_key=True)
 
     channel            = Column(Integer, nullable=False)
-    dsp_channel        = Column(Integer)
-    stream_type        = Column(String, default="raw", nullable=False)
-    if_freq            = Column(Float, default=0.0, nullable=False)
-    kernel_data        = Column(LargeBinary) # Binary string of np.complex128
-    kernel_bias        = Column(Float, default=0.0, nullable=False)
-    threshold          = Column(Float, default=0.0, nullable=False)
-    threshold_invert   = Column(Boolean, default=False, nullable=False)
-
     triggering_chan_id = Column(Integer, ForeignKey("measurement.id"))
-
-    def kernel():
-        doc = "The kernel as represented by a numpy complex128 array"
-        def fget(self):
-            return np.frombuffer(self.kernel_data, dtype=np.complex128)
-        def fset(self, value):
-            self.kernel_data = value.astype(np.complex128).tobytes()
-        return locals()
-    kernel = property(**kernel())
 
     def pulse_check(name):
         return name in ["constant", "gaussian", "drag", "gaussOn", "gaussOff", "dragGaussOn", "dragGaussOff",
@@ -459,7 +486,7 @@ class Measurement(LogicalChannel, ChannelMixin):
     autodyne which needs an IQ pair or hetero/homodyne which needs just a marker channel.
         meas_type: Type of measurement (autodyne, homodyne)
         autodyne_freq: use to bake the modulation into the pulse, so that it has constant phase
-        frequency: use to asssociate modulation with the channel
+        frequency: use to associate modulation with the channel
     '''
     id = Column(Integer, ForeignKey("logicalchannel.id"), primary_key=True)
 
@@ -470,7 +497,14 @@ class Measurement(LogicalChannel, ChannelMixin):
 
     trig_chan       = relationship("LogicalMarkerChannel", uselist=False, backref="meas_chan", foreign_keys="[LogicalMarkerChannel.meas_chan_id]")
     receiver_chan   = relationship("ReceiverChannel", uselist=False, backref="triggering_chan", foreign_keys="[ReceiverChannel.triggering_chan_id]")
+    processor_chan        = relationship("DigitalInput", uselist=False, backref='input_chan', foreign_keys="DigitalInput.meas_chan_id")
+
     # attenuator_chan = relationship("AttenuatorChannel", uselist=False, backref="measuring_chan", foreign_keys="[AttenuatorChannel.measuring_chan_id]")
+    @validates('frequency')
+    def validate_frequency(self, key, value):
+        if value!=0 and self.meas_type == 'autodyne':
+            warnings.warn('Setting modulation frequency for an autodyne measurement. Are you sure you don\'t want to set autodyne_freq instead?')
+        return value
 
     @validates('meas_type')
     def validate_meas_type(self, key, source):

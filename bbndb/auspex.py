@@ -1,4 +1,5 @@
 import numpy as np
+import os
 from copy import deepcopy
 import datetime
 import networkx as nx
@@ -8,9 +9,11 @@ from sqlalchemy.orm import relationship, backref, validates
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy import inspect
 from IPython.display import HTML, display
-from . import session #session.Base, Session, engine
+from .session import Base
 
-class Connection(session.Base):
+__current_pipeline__ = None
+
+class Connection(Base):
     __tablename__ = "connection"
     id            = Column(Integer, primary_key=True)
     node1_id      = Column(Integer, ForeignKey("nodeproxy.id"))
@@ -20,12 +23,13 @@ class Connection(session.Base):
     pipeline_name = Column(String, nullable=False)
     time          = Column(DateTime)
 
-class NodeProxy(session.Base):
+class NodeProxy(Base):
     __tablename__ = "nodeproxy"
     id              = Column(Integer, primary_key=True)
     label           = Column(String)
     qubit_name      = Column(String)
     node_type       = Column(String(50))
+    hash_val        = Column(Integer, nullable=False)
     connection_to   = relationship("Connection", uselist=False, backref='node1', foreign_keys="[Connection.node1_id]")
     connection_from = relationship("Connection", uselist=False, backref='node2', foreign_keys="[Connection.node2_id]")
 
@@ -33,6 +37,10 @@ class NodeProxy(session.Base):
         'polymorphic_identity':'channel',
         'polymorphic_on':node_type
     }
+
+    def __init__(self, **kwargs):
+        self.hash_val = int(np.random.randint(np.iinfo(np.uint32).max, dtype=np.uint32))
+        super().__init__(**kwargs)
 
     def print(self, show=True):
         table_code = ""
@@ -42,13 +50,15 @@ class NodeProxy(session.Base):
             if c.name not in ["id", "label", "qubit_name", "node_type"]:
                 hist = getattr(inspr.attrs, c.name).history
                 dirty = "Yes" if hist.has_changes() else ""
-                table_code += f"<tr><td>{c.name}</td><td>{getattr(self,c.name)}</td><td>{dirty}</td></tr>"
+                if c.name == "kernel_data":
+                    table_code += f"<tr><td>{c.name}</td><td>Binary Data of length {len(self.kernel)}</td><td>{dirty}</td></tr>"
+                else:
+                    table_code += f"<tr><td>{c.name}</td><td>{getattr(self,c.name)}</td><td>{dirty}</td></tr>"
         html = f"<b>{self.node_type}</b> ({self.qubit_name}) <i>{label}</i></br><table style='{{padding:0.5em;}}'><tr><th>Attribute</th><th>Value</th><th>Changes?</th></tr><tr>{table_code}</tr></table>"
         if show:
             display(HTML(html))
         else:
             return html
-
 
 class NodeMixin(object):
     @declared_attr
@@ -82,19 +92,19 @@ class FilterProxy(NodeMixin, NodeProxy):
 
         filter_obj.pipelineMgr = self.pipelineMgr
         filter_obj.qubit_name = self.qubit_name
-
-        self.pipelineMgr.meas_graph.add_node(str(filter_obj), node_obj=filter_obj)
-        self.pipelineMgr.meas_graph.add_edge(str(self), str(filter_obj), connector_in=connector_in, connector_out=connector_out)
+        self.pipelineMgr.meas_graph.add_node(filter_obj.hash_val, node_obj=filter_obj)
+        self.pipelineMgr.meas_graph.add_edge(self.hash_val, filter_obj.hash_val, connector_in=connector_in, connector_out=connector_out)
         self.pipelineMgr.session.add(filter_obj)
         return filter_obj
 
     def drop(self):
-        desc = list(nx.algorithms.dag.descendants(self.pipelineMgr.meas_graph, self))
-        desc.append(self)
-        self.pipelineMgr.meas_graph.remove_nodes_from(desc)
+        desc = list(nx.algorithms.dag.descendants(self.pipelineMgr.meas_graph, str(self)))
+        desc.append(str(self))
         for n in desc:
             # n.exp = None
+            n = self.pipelineMgr.meas_graph.nodes[n]['node_obj']
             self.pipelineMgr.session.expunge(n)
+        self.pipelineMgr.meas_graph.remove_nodes_from(desc)
 
     def node_label(self):
         label = self.label if self.label else ""
@@ -107,7 +117,7 @@ class FilterProxy(NodeMixin, NodeProxy):
         return f"{self.__class__.__name__} {self.label} ({self.qubit_name})"
 
     def __getitem__(self, key):
-        ss = list(self.pipelineMgr.meas_graph.successors(str(self)))
+        ss = list(self.pipelineMgr.meas_graph.successors(self.hash_val))
         label_matches = [self.pipelineMgr.meas_graph.nodes[s]['node_obj'] for s in ss if self.pipelineMgr.meas_graph.nodes[s]['node_obj'].label == key]
         class_matches = [self.pipelineMgr.meas_graph.nodes[s]['node_obj'] for s in ss if self.pipelineMgr.meas_graph.nodes[s]['node_obj'].__class__.__name__ == key]
         if len(label_matches) == 1:
@@ -156,10 +166,16 @@ class Demodulate(FilterProxy, NodeMixin):
         return value
 
 class Average(FilterProxy, NodeMixin):
-    """Takes data and collapses along the specified axis."""
-    # Over which axis should averaging take place
+    """Takes data and collapses along the specified axis. Threshold is used for
+    state identification."""
     id = Column(Integer, ForeignKey("filterproxy.id"), primary_key=True)
     axis = Column(String, default="averages")
+    threshold = Column(Float, default=0.5)
+
+class Framer(FilterProxy, NodeMixin):
+    """Emit out data in increments defined by the specified axis."""
+    id = Column(Integer, ForeignKey("filterproxy.id"), primary_key=True)
+    axis = Column(String, nullable=False)
 
 class FidelityKernel(FilterProxy, NodeMixin):
     """Calculates the single shot fidelity from given input"""
@@ -230,18 +246,59 @@ class Buffer(OutputProxy, NodeMixin):
             kwargs.pop("groupname")
         super(Buffer, self).__init__(**kwargs)
 
-class QubitProxy(NodeMixin, NodeProxy):
+class StreamSelect(NodeMixin, NodeProxy):
     """docstring for FilterProxy"""
     id = Column(Integer, ForeignKey("nodeproxy.id"), primary_key=True)
 
+    dsp_channel = Column(Integer, default=0, nullable=False)
+    stream_type = Column(String, default='raw', nullable=False)
+    @validates('stream_type')
+    def validate_stream_type(self, key, value):
+        assert (value in ["raw", "demodulated", "integrated", "averaged"])
+        return value
+
+    dsp_channel        = Column(Integer, default=1)
+    if_freq            = Column(Float, default=0.0, nullable=False)
+    kernel_data        = Column(LargeBinary) # Binary string of np.complex128
+    kernel_bias        = Column(Float, default=0.0, nullable=False)
+    threshold          = Column(Float, default=0.0, nullable=False)
+    threshold_invert   = Column(Boolean, default=False, nullable=False)
+
+    def kernel():
+        doc = "The kernel as represented by a numpy complex128 array, or the name of a kernel file."
+        def fget(self):
+            if self.kernel_data:
+                return np.frombuffer(self.kernel_data, dtype=np.complex128)
+            else:
+                return np.empty((0,), dtype=np.complex128)
+        def fset(self, value):
+            if isinstance(value, np.ndarray):
+                self.kernel_data = value.astype(np.complex128).tobytes()
+            elif isinstance(value, str):
+                try:
+                    from auspex.config import KernelDir
+                except ImportError:
+                    KernelDir = "./"
+                    logger.warning("Could not load auspex config, loading kernel from current directory.")
+                kpath = os.path.join(KernelDir, value)
+                if os.path.exists(kpath):
+                    kdata = np.loadtxt(kpath, dtype=complex,
+                        converters={0: lambda s: complex(s.decode().replace('+-', '-'))})
+                    self.kernel_data = kdata.astype(np.complex128).tobytes()
+                else:
+                    raise ValueError(f"Unable to open kernel file: {kpath}.")
+            else:
+                raise ValueError(f"Unable to load kernel for stream selector {self.id} -- please provide a path or numpy array.")
+        return locals()
+    kernel = property(**kernel())
+
     def __init__(self, pipelineMgr=None, **kwargs):
         global __current_pipeline__
-        super(QubitProxy, self).__init__(**kwargs)
+        super(StreamSelect, self).__init__(**kwargs)
         self.pipelineMgr = pipelineMgr
         __current_pipeline__ = pipelineMgr
         self.digitizer_settings = None
         self.available_streams = None
-        self.stream_type = None
 
     def add(self, filter_obj, connector_out="source", connector_in="sink"):
         # if not self.pipeline:
@@ -252,24 +309,17 @@ class QubitProxy(NodeMixin, NodeProxy):
         filter_obj.qubit_name  = self.qubit_name
         filter_obj.pipelineMgr = self.pipelineMgr
         # filter_obj.exp         = self.pipeline
-        if str(self) not in self.pipelineMgr.meas_graph.nodes():
-            self.pipelineMgr.meas_graph.add_node(str(self), node_obj=self)
-        self.pipelineMgr.meas_graph.add_node(str(filter_obj), node_obj=filter_obj)
-        self.pipelineMgr.meas_graph.add_edge(str(self), str(filter_obj), connector_in=connector_in, connector_out=connector_out)
+        if self.hash_val not in self.pipelineMgr.meas_graph.nodes():
+            self.pipelineMgr.meas_graph.add_node(self.hash_val, node_obj=self)
+        self.pipelineMgr.meas_graph.add_node(filter_obj.hash_val, node_obj=filter_obj)
+        self.pipelineMgr.meas_graph.add_edge(self.hash_val, filter_obj.hash_val, connector_in=connector_in, connector_out=connector_out)
         self.pipelineMgr.session.add(filter_obj)
 
         return filter_obj
 
-    def set_stream_type(self, stream_type):
-        if stream_type not in ["raw", "demodulated", "integrated", "averaged"]:
-            raise ValueError(f"Stream type {stream_type} must be one of raw, demodulated, integrated, or averaged.")
-        if stream_type not in self.available_streams:
-            raise ValueError(f"Stream type {stream_type} is not avaible for {self.qubit_name}. Must be one of {self.available_streams}")
-        self.stream_type = stream_type
-
     def clear_pipeline(self):
         """Remove all nodes coresponding to the qubit"""
-        desc = nx.algorithms.dag.descendants(self.pipelineMgr.meas_graph, str(self))
+        desc = nx.algorithms.dag.descendants(self.pipelineMgr.meas_graph, self.hash_val)
         for n in desc:
             # n.exp = None
             n = self.pipelineMgr.meas_graph.nodes[n]['node_obj']
@@ -280,25 +330,25 @@ class QubitProxy(NodeMixin, NodeProxy):
         Output = Buffer if buffers else Write
         if average:
             if self.stream_type.lower() == "raw":
-                self.add(Demodulate()).add(Integrate()).add(Average()).add(Output(groupname=self.qubit_name+'-main'))
+                self.add(Demodulate()).add(Integrate()).add(Average()).add(Output(groupname=self.qubit_name+'-raw_int'))
             if self.stream_type.lower() == "demodulated":
-                self.add(Integrate()).add(Average()).add(Output(groupname=self.qubit_name+'-main'))
+                self.add(Integrate()).add(Average()).add(Output(groupname=self.qubit_name+'-demod_int'))
             if self.stream_type.lower() == "integrated":
                 self.add(Average()).add(Output(groupname=self.qubit_name+'-main'))
             if self.stream_type.lower() == "averaged":
-                self.add(Output(groupname=self.qubit_name+'-main'))
+                self.add(Output(groupname=self.qubit_name+'-avg'))
         else:
             if self.stream_type.lower() == "raw":
-                self.add(Demodulate()).add(Integrate()).add(Output(groupname=self.qubit_name+'-main'))
+                self.add(Demodulate()).add(Integrate()).add(Output(groupname=self.qubit_name+'-raw_int'))
             if self.stream_type.lower() == "demodulated":
-                self.add(Integrate()).add(Output(groupname=self.qubit_name+'-main'))
+                self.add(Integrate()).add(Output(groupname=self.qubit_name+'-demod_int'))
             if self.stream_type.lower() == "integrated":
                 self.add(Output(groupname=self.qubit_name+'-main'))
             if self.stream_type.lower() == "averaged":
                 raise Exception("Cannot have averaged stream without averaging?!")
 
     def show_pipeline(self):
-        desc = list(nx.algorithms.dag.descendants(self.pipelineMgr.meas_graph, str(self))) + [str(self)]
+        desc = list(nx.algorithms.dag.descendants(self.pipelineMgr.meas_graph, self.hash_val)) + [self.hash_val]
         subgraph = self.pipelineMgr.meas_graph.subgraph(desc)
         return self.pipelineMgr.show_pipeline(subgraph=subgraph)
 
@@ -309,13 +359,13 @@ class QubitProxy(NodeMixin, NodeProxy):
         return self.__repr__()
 
     def __repr__(self):
-        return f"Qubit {self.qubit_name}"
+        return f"StreamSelect for {self.qubit_name}"
 
     def __str__(self):
-        return f"Qubit {self.qubit_name}"
+        return f"StreamSelect for {self.qubit_name}"
 
     def __getitem__(self, key):
-        ss = list(self.pipelineMgr.meas_graph.successors(str(self)))
+        ss = list(self.pipelineMgr.meas_graph.successors(self.hash_val))
         label_matches = [self.pipelineMgr.meas_graph.nodes[s]['node_obj'] for s in ss if self.pipelineMgr.meas_graph.nodes[s]['node_obj'].label == key]
         class_matches = [self.pipelineMgr.meas_graph.nodes[s]['node_obj'] for s in ss if self.pipelineMgr.meas_graph.nodes[s]['node_obj'].__class__.__name__ == key]
         if len(label_matches) == 1:
