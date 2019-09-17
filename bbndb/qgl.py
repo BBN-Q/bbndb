@@ -25,6 +25,9 @@ import numpy as np
 from math import tan, cos, pi
 from copy import deepcopy
 import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 
 from sqlalchemy import Column, DateTime, String, Boolean, Float, Integer, LargeBinary, ForeignKey, func, PickleType
 from sqlalchemy.ext.mutable import Mutable
@@ -32,6 +35,8 @@ from sqlalchemy.orm import relationship, backref, validates
 from sqlalchemy.ext.declarative import declared_attr
 
 from .session import Base
+
+from QGL.drivers import APSPattern, APS2Pattern, APS3Pattern
 
 class MutableDict(Mutable, dict):
     @classmethod
@@ -210,11 +215,14 @@ class Transmitter(DatabaseItem, Base):
 
     # Things only needed for APS3
     serial_port      = Column(String)
+    dac              = Column(Integer, nullable=False)
     soft_trigger     = Column(Boolean, default=False)
     bypass_modulator = Column(Boolean, default=False)
     bypass_nco       = Column(Boolean, default=False)
     dac_output_mux   = Column(String, default=True)
-    trigger_output_select = Column(Boolean, default=False)
+    trigger_output_select = Column(Integer, default=False)
+    trigger_input_select = Column(Boolean, default=False)
+    csr0_master = Column(Boolean, default=False)
     marker_delay     = Column(Float, default=0)
     marker_mode      = Column(Boolean, default=False)
     dac_switch_mode  = Column(String, default="MIX")
@@ -368,6 +376,21 @@ class LogicalChannel(ChannelMixin, Channel):
                     foreign_keys=[gate_chan_id],
                     remote_side="LogicalChannel.id",
                     backref=backref("gated_chan", uselist=False))
+
+    @validates('pulse_params')
+    def validate_pulse_params(self, key, params):
+        if isinstance(self, Qubit):
+            if (params is not None and
+                'length' in params and
+               params['length'] is not None and
+               hasattr(self, 'phys_chan') and
+               self.phys_chan is not None and
+               hasattr(self.phys_chan, 'translator') and
+               self.phys_chan.translator is not None):
+               clk_period = 1 / eval(self.phys_chan.translator).MODULATION_CLOCK
+               if (params['length'] % clk_period) != 0:
+                   logger.warning('Pulse length of {} is not an integer number of FPGA clock cycles on device with clock period {}; misalignment between channels may occur.'.format(params['length'], clk_period))
+        return params
 
 class PhysicalMarkerChannel(PhysicalChannel, ChannelMixin):
     '''
