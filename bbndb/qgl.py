@@ -203,7 +203,6 @@ class Transmitter(DatabaseItem, Base):
     address          = Column(String)
     trigger_interval = Column(Float, default=100e-6, nullable=False)
     trigger_source   = Column(String, default="external", nullable=False)
-    delay            = Column(Float, default=0.0, nullable=False)
     master           = Column(Boolean, default=False, nullable=False)
     sequence_file    = Column(String)
     transceiver_id   = Column(Integer, ForeignKey("transceiver.id"))
