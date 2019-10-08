@@ -399,7 +399,8 @@ class ReceiverChannel(PhysicalChannel, ChannelMixin):
 
     channel            = Column(Integer, nullable=False)
     triggering_chan    = relationship("Measurement", backref='receiver_chan', foreign_keys="[Measurement.receiver_chan_id]")
-
+    attenuation        = Column(Integer)
+    
     def pulse_check(name):
         return name in ["constant", "gaussian", "drag", "gaussOn", "gaussOff", "dragGaussOn", "dragGaussOff",
                        "tanh", "exp_decay", "autodyne", "arb_axis_drag"]
