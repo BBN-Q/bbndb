@@ -532,6 +532,7 @@ class Edge(LogicalChannel, ChannelMixin):
 
     source_id = Column(Integer, ForeignKey("qubit.id"))
     target_id = Column(Integer, ForeignKey("qubit.id"))
+    cnot_impl = Column(String)
 
     def __init__(self, **kwargs):
         if "pulse_params" not in kwargs.keys():
