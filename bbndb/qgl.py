@@ -527,12 +527,13 @@ class Edge(LogicalChannel, ChannelMixin):
 
     An Edge is also effectively an abstract channel, so it carries the same properties as a
     Qubit channel.
+        cnot_impl: string with the chosen, edge-specific CNOT implementation.  If defined, it overrides the default implementation set in QGL/config.py
     '''
     id = Column(Integer, ForeignKey("logicalchannel.id"), primary_key=True)
 
     source_id = Column(Integer, ForeignKey("qubit.id"))
     target_id = Column(Integer, ForeignKey("qubit.id"))
-    cnot_impl = Column(String)
+    cnot_impl = Column(String, nullable = True)
 
     def __init__(self, **kwargs):
         if "pulse_params" not in kwargs.keys():
