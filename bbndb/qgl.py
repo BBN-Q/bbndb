@@ -148,6 +148,7 @@ class DCSource(DatabaseItem, Base):
     mode      = Column(String, default='current')
     pump_source = relationship("Generator", uselist=False, foreign_keys="[Generator.DCsource_id]")
     phys_chans  = relationship('PhysicalChannel', back_populates = 'DCsource')
+    qubit_id = Column(Integer, ForeignKey("qubit.id"))
 
 class Receiver(DatabaseItem, Base):
     """A receiver , or generally an analog to digitial converter"""
@@ -466,6 +467,8 @@ class Qubit(LogicalChannel, ChannelMixin):
     edge_source  = relationship("Edge", backref="source", foreign_keys="[Edge.source_id]")
     edge_target  = relationship("Edge", backref="target", foreign_keys="[Edge.target_id]")
     measure_chan = relationship("Measurement", uselist=False, backref="control_chan", foreign_keys="[Measurement.control_chan_id]")
+    bias_source = relationship("DCSource", uselist=False, backref = "qubit", foreign_keys="DCSource.qubit_id")
+    bias_pairs = Column(MutableDict.as_mutable(PickleType), default={}, nullable=True)
 
     def __init__(self, **kwargs):
         if "pulse_params" not in kwargs.keys():
@@ -477,6 +480,16 @@ class Qubit(LogicalChannel, ChannelMixin):
                             'drag_scaling': 0,
                             'sigma': 5e-9}
         super(Qubit, self).__init__(**kwargs)
+
+    def add_bias_pairs(self, biases, frequencies):
+        if not isinstance(biases, list):
+            biases = [biases]
+        if not isinstance(frequencies, list):
+            frequencies = [frequencies]
+        if len(frequencies) != len(biases):
+            raise ValueError("Biases and frequencies must have the same length")
+        for b, f in zip(biases, frequencies):
+            self.bias_pairs[b] = f
 
 class Measurement(LogicalChannel, ChannelMixin):
     '''
