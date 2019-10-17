@@ -378,6 +378,7 @@ class PhysicalQuadratureChannel(PhysicalChannel, ChannelMixin):
     attenuation          = Column(Float, default=0.0, nullable=False)
     channel              = Column(Integer, nullable=False)
     sequence_file        = Column(String)
+    extra_meta           = Column(MutableDict.as_mutable(PickleType), default={})
 
 class AttenuatorChannel(PhysicalChannel, ChannelMixin):
     """
@@ -400,7 +401,7 @@ class ReceiverChannel(PhysicalChannel, ChannelMixin):
     channel            = Column(Integer, nullable=False)
     triggering_chan    = relationship("Measurement", backref='receiver_chan', foreign_keys="[Measurement.receiver_chan_id]")
     attenuation        = Column(Integer)
-    
+
     def pulse_check(name):
         return name in ["constant", "gaussian", "drag", "gaussOn", "gaussOff", "dragGaussOn", "dragGaussOff",
                        "tanh", "exp_decay", "autodyne", "arb_axis_drag"]
