@@ -153,6 +153,7 @@ class DCSource(DatabaseItem, Base):
     mode      = Column(String, default='current')
     pump_source = relationship("Generator", uselist=False, foreign_keys="[Generator.DCsource_id]")
     phys_chans  = relationship('PhysicalChannel', back_populates = 'DCsource')
+    qubit_id = Column(Integer, ForeignKey("qubit.id"))
 
 class Receiver(DatabaseItem, Base):
     """A receiver , or generally an analog to digitial converter"""
@@ -209,7 +210,6 @@ class Transmitter(DatabaseItem, Base):
 
     trigger_interval = Column(Float, default=100e-6, nullable=False)
     trigger_source   = Column(String, default="external", nullable=False)
-    delay            = Column(Float, default=0.0, nullable=False)
     master           = Column(Boolean, default=False, nullable=False)
     sequence_file    = Column(String)
     transceiver_id   = Column(Integer, ForeignKey("transceiver.id"))
@@ -509,6 +509,8 @@ class Qubit(LogicalChannel, ChannelMixin):
     edge_source  = relationship("Edge", backref="source", foreign_keys="[Edge.source_id]")
     edge_target  = relationship("Edge", backref="target", foreign_keys="[Edge.target_id]")
     measure_chan = relationship("Measurement", uselist=False, backref="control_chan", foreign_keys="[Measurement.control_chan_id]")
+    bias_source = relationship("DCSource", uselist=False, backref = "qubit", foreign_keys="DCSource.qubit_id")
+    bias_pairs = Column(MutableDict.as_mutable(PickleType), default={}, nullable=True)
 
     def __init__(self, **kwargs):
         if "pulse_params" not in kwargs.keys():
@@ -520,6 +522,16 @@ class Qubit(LogicalChannel, ChannelMixin):
                             'drag_scaling': 0,
                             'sigma': 5e-9}
         super(Qubit, self).__init__(**kwargs)
+
+    def add_bias_pairs(self, biases, frequencies):
+        if not isinstance(biases, list):
+            biases = [biases]
+        if not isinstance(frequencies, list):
+            frequencies = [frequencies]
+        if len(frequencies) != len(biases):
+            raise ValueError("Biases and frequencies must have the same length")
+        for b, f in zip(biases, frequencies):
+            self.bias_pairs[b] = f
 
 class Measurement(LogicalChannel, ChannelMixin):
     '''
@@ -569,11 +581,13 @@ class Edge(LogicalChannel, ChannelMixin):
 
     An Edge is also effectively an abstract channel, so it carries the same properties as a
     Qubit channel.
+        cnot_impl: string with the chosen, edge-specific CNOT implementation.  If defined, it overrides the default implementation set in QGL/config.py
     '''
     id = Column(Integer, ForeignKey("logicalchannel.id"), primary_key=True)
 
     source_id = Column(Integer, ForeignKey("qubit.id"))
     target_id = Column(Integer, ForeignKey("qubit.id"))
+    cnot_impl = Column(String, nullable = True)
 
     def __init__(self, **kwargs):
         if "pulse_params" not in kwargs.keys():
