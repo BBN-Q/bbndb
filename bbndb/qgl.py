@@ -213,26 +213,7 @@ class Transmitter(DatabaseItem, Base):
     sequence_file    = Column(String)
     transceiver_id   = Column(Integer, ForeignKey("transceiver.id"))
 
-    # Things only needed for APS3
-    serial_port      = Column(String)
-    dac              = Column(Integer, nullable=False)
-    soft_trigger     = Column(Boolean, default=False)
-    bypass_modulator = Column(Boolean, default=False)
-    bypass_nco       = Column(Boolean, default=False)
-    dac_output_mux   = Column(String, default=True)
-    trigger_output_select = Column(Integer, default=False)
-    trigger_input_select = Column(Boolean, default=False)
-    csr0_master = Column(Boolean, default=False)
-    marker_delay     = Column(Float, default=0)
-    marker_mode      = Column(Boolean, default=False)
-    dac_switch_mode  = Column(String, default="MIX")
-    dac_full_scale_current = Column(Float, default=40.0)
-    dac_nco_enable   = Column(Boolean, default=False)
-    dac_FIR85_enable = Column(Boolean, default=False)
-    dac_nco_frequency = Column(Float, default=0.0)
-    dac_pll_reference = Column(String, default='REF IN')
-    dac_shuffle_mode = Column(Integer, default=0)
-
+    tx_params = Column(MutableDict.as_mutable(PickleType), default={})
 
     channels = relationship("PhysicalChannel", back_populates="transmitter", cascade="all, delete, delete-orphan")
 
