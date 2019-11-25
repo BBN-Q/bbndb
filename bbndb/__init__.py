@@ -48,7 +48,7 @@ def copy_sqla_object(obj, omit_fk=True):
             pass
     return cls(**to_set)
 
-def deepcopy_sqla_object(startobj, session, flush=True):
+def deepcopy_sqla_object(startobj, session=None, flush=True):
     """
     Originally from Rudolf Cardinal: https://groups.google.com/forum/#!topic/sqlalchemy/wb2M_oYkQdY
     """
@@ -108,10 +108,11 @@ def deepcopy_sqla_object(startobj, session, flush=True):
             setattr(newobj, relationship.key, related_new)
     # Now we can do session insert.
     # print("deepcopy_sqla_object: pass 3: insert into session")
-    for newobj in objmap.values():
-        session.add(newobj)
-    # Done
-    # print("deepcopy_sqla_object: done")
-    if flush:
-        session.flush()
+    if session:
+        for newobj in objmap.values():
+            session.add(newobj)
+        # Done
+        # print("deepcopy_sqla_object: done")
+        if flush:
+            session.flush()
     return objmap[startobj]  # returns the new object matching startobj
