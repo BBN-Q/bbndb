@@ -165,6 +165,7 @@ class Receiver(DatabaseItem, Base):
     transceiver_id   = Column(Integer, ForeignKey("transceiver.id"))
     acquire_mode     = Column(String, default="digitizer", nullable=False)
     reference        = Column(String, default="external")
+    reference_freq   = Column(Float, default=10e6)
     stream_sel       = Column(String, nullable = False)
     channels = relationship("PhysicalChannel", back_populates="receiver", cascade="all, delete, delete-orphan")
 
