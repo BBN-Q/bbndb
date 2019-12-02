@@ -165,6 +165,7 @@ class Receiver(DatabaseItem, Base):
     transceiver_id   = Column(Integer, ForeignKey("transceiver.id"))
     acquire_mode     = Column(String, default="digitizer", nullable=False)
     reference        = Column(String, default="external")
+    reference_freq   = Column(Float, default=10e6)
     stream_sel       = Column(String, nullable = False)
     channels = relationship("PhysicalChannel", back_populates="receiver", cascade="all, delete, delete-orphan")
 
@@ -412,7 +413,8 @@ class PhysicalQuadratureChannel(PhysicalChannel, ChannelMixin):
     Q_channel_amp_factor = Column(Float, default=1.0, nullable=False)
     attenuation          = Column(Float, default=0.0, nullable=False)
     channel              = Column(Integer, nullable=False)
-    sequence_file        = Column(String, default="")
+    sequence_file        = Column(String)
+    extra_meta           = Column(MutableDict.as_mutable(PickleType), default={})
 
 class AttenuatorChannel(PhysicalChannel, ChannelMixin):
     """
@@ -433,7 +435,8 @@ class ReceiverChannel(PhysicalChannel, ChannelMixin):
     id = Column(Integer, ForeignKey("physicalchannel.id"), primary_key=True)
 
     channel            = Column(Integer, nullable=False)
-    triggering_chan_id = Column(Integer, ForeignKey("measurement.id"))
+    triggering_chan    = relationship("Measurement", backref='receiver_chan', foreign_keys="[Measurement.receiver_chan_id]")
+    attenuation        = Column(Integer)
 
     def pulse_check(name):
         return name in ["constant", "gaussian", "drag", "gaussOn", "gaussOff", "dragGaussOn", "dragGaussOff",
@@ -508,7 +511,7 @@ class Measurement(LogicalChannel, ChannelMixin):
     control_chan_id = Column(Integer, ForeignKey("qubit.id"))
 
     trig_chan       = relationship("LogicalMarkerChannel", uselist=False, backref="meas_chan", foreign_keys="[LogicalMarkerChannel.meas_chan_id]")
-    receiver_chan   = relationship("ReceiverChannel", uselist=False, backref="triggering_chan", foreign_keys="[ReceiverChannel.triggering_chan_id]")
+    receiver_chan_id = Column(Integer, ForeignKey("receiverchannel.id"))
     processor_chan        = relationship("DigitalInput", uselist=False, backref='input_chan', foreign_keys="DigitalInput.meas_chan_id")
 
     # attenuator_chan = relationship("AttenuatorChannel", uselist=False, backref="measuring_chan", foreign_keys="[AttenuatorChannel.measuring_chan_id]")
