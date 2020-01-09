@@ -25,8 +25,9 @@ import numpy as np
 from math import tan, cos, pi
 from copy import deepcopy
 import datetime
+from IPython.display import HTML, display
 
-from sqlalchemy import Column, DateTime, String, Boolean, Float, Integer, LargeBinary, ForeignKey, func, PickleType
+from sqlalchemy import Column, DateTime, String, Boolean, Float, Integer, LargeBinary, ForeignKey, func, PickleType, inspect
 from sqlalchemy.ext.mutable import Mutable
 from sqlalchemy.orm import relationship, backref, validates
 from sqlalchemy.ext.declarative import declared_attr
@@ -493,6 +494,21 @@ class Qubit(LogicalChannel, ChannelMixin):
             raise ValueError("Biases and frequencies must have the same length")
         for b, f in zip(biases, frequencies):
             self.bias_pairs[b] = f
+
+    def print(self, show=True):
+        ''' Print out table with latest qubit settings and calibrated parameters '''
+        table_code = ""
+        label = self.label if self.label else "Unlabeled"
+        inspr = inspect(self)
+        for c in list(self.__mapper__.columns):
+            if c.name not in ["id", "label", "qubit_name", "node_type", "type"]:
+                hist = getattr(inspr.attrs, c.name).history
+                table_code += f"<tr><td>{c.name}</td><td>{getattr(self,c.name)}</td></tr>"
+        html = f"<b>{label}</b></br><table style='{{padding:0.5em;}}'><tr><th>Attribute</th><th>Value</th></tr><tr>{table_code}</tr></table>"
+        if show:
+            display(HTML(html))
+        else:
+            return html
 
 class Measurement(LogicalChannel, ChannelMixin):
     '''
