@@ -501,21 +501,24 @@ class Qubit(LogicalChannel, ChannelMixin):
         table_code = ""
         label = self.label if self.label else "Unlabeled"
         param_dic = {}
+        param_date = {}
         param_dic['frequency (GHz)'] = round((self.frequency + self.phys_chan.generator.frequency)/1e9,4)
         params = ['T1', 'T2', 'Readout fid.'] #TODO: pretty print
         for param in params:
             s = get_cl_session().query(Sample.id).filter_by(name=self.label).first()
             if s:
-                c = get_cl_session().query(Calibration.value).order_by(-Calibration.id).filter_by(sample_id=s[0], name = param)
+                c = get_cl_session().query(Calibration.value, Calibration.date).order_by(-Calibration.id).filter_by(sample_id=s[0], name = param)
                 if c.first():
                     param_dic[param] = round(c.first()[0], 2)
+                    param_date[param]= c.first()[1].strftime("%Y %b. %d %I:%M:%S %p")
         if verbose:
             for key in self.pulse_params:
                 param_dic[key] = self.pulse_params[key]
         for c in param_dic:
-            table_code += f"<tr><td>{c}</td><td>{param_dic[c]}</td></tr>"
-        html = f"<b>{label}</b></br><table style='{{padding:0.5em;}}'><tr><th>Attribute</th><th>Value</th></tr><tr>{table_code}</tr></table>"
-        #TODO: add column: last calibrated
+            if c not in param_date:
+                param_date[c] = ''
+            table_code += f"<tr><td>{c}</td><td>{param_dic[c]}</td><td>{param_date[c]}</td></tr>"
+        html = f"<b>{label}</b></br><table style='{{padding:0.5em;}}'><tr><th>Attribute</th><th>Value</th><th>Last Measured</th></tr><tr>{table_code}</tr></table>"
         #TODO: add edge description
         if show:
             display(HTML(html))
