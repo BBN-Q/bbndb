@@ -32,7 +32,8 @@ from sqlalchemy.ext.mutable import Mutable
 from sqlalchemy.orm import relationship, backref, validates
 from sqlalchemy.ext.declarative import declared_attr
 
-from .session import Base
+from .session import Base, get_cl_session
+from .calibration import Sample, Calibration
 
 class MutableDict(Mutable, dict):
     @classmethod
@@ -495,16 +496,27 @@ class Qubit(LogicalChannel, ChannelMixin):
         for b, f in zip(biases, frequencies):
             self.bias_pairs[b] = f
 
-    def print(self, show=True):
+    def print(self, show=True, verbose=False):
         ''' Print out table with latest qubit settings and calibrated parameters '''
         table_code = ""
         label = self.label if self.label else "Unlabeled"
-        inspr = inspect(self)
-        for c in list(self.__mapper__.columns):
-            if c.name not in ["id", "label", "qubit_name", "node_type", "type"]:
-                hist = getattr(inspr.attrs, c.name).history
-                table_code += f"<tr><td>{c.name}</td><td>{getattr(self,c.name)}</td></tr>"
+        param_dic = {}
+        param_dic['frequency (GHz)'] = round((self.frequency + self.phys_chan.generator.frequency)/1e9,4)
+        params = ['T1', 'T2', 'Readout fid.'] #TODO: pretty print
+        for param in params:
+            s = get_cl_session().query(Sample.id).filter_by(name=self.label).first()
+            if s:
+                c = get_cl_session().query(Calibration.value).order_by(-Calibration.id).filter_by(sample_id=s[0], name = param)
+                if c.first():
+                    param_dic[param] = round(c.first()[0], 2)
+        if verbose:
+            for key in self.pulse_params:
+                param_dic[key] = self.pulse_params[key]
+        for c in param_dic:
+            table_code += f"<tr><td>{c}</td><td>{param_dic[c]}</td></tr>"
         html = f"<b>{label}</b></br><table style='{{padding:0.5em;}}'><tr><th>Attribute</th><th>Value</th></tr><tr>{table_code}</tr></table>"
+        #TODO: add column: last calibrated
+        #TODO: add edge description
         if show:
             display(HTML(html))
         else:
