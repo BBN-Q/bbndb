@@ -519,7 +519,25 @@ class Qubit(LogicalChannel, ChannelMixin):
                 param_date[c] = ''
             table_code += f"<tr><td>{c}</td><td>{param_dic[c]}</td><td>{param_date[c]}</td></tr>"
         html = f"<b>{label}</b></br><table style='{{padding:0.5em;}}'><tr><th>Attribute</th><th>Value</th><th>Last Measured</th></tr><tr>{table_code}</tr></table>"
-        #TODO: add edge description
+        #TODO: add edge description (as print event?)
+        if show:
+            display(HTML(html))
+        else:
+            return html
+
+    def print_edges(self, show=True, verbose=False, edges=[]):
+        ''' Print out table with edge data'''
+        label = self.label if self.label else "Unlabeled"
+        param_dic = {}
+        param_date = {}
+        html=f"<b>{label} edges</b></br>"
+        for edge in edges:
+            table_code = ''
+            for key in edge.pulse_params:
+              param_dic[key] = edge.pulse_params[key]
+            for c in param_dic:
+                table_code += f"<tr><td>{c}</td><td>{param_dic[c]}</td></tr>"
+            html+= f"<table style='padding:0.5em; float: left; border: 1px'><tr><th>Attribute</th><th>CNOT({edge.source.label}, {edge.target.label})</th></tr><tr>{table_code}</tr></table>"
         if show:
             display(HTML(html))
         else:
