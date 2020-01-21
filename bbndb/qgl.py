@@ -29,7 +29,7 @@ from IPython.display import HTML, display
 
 from sqlalchemy import Column, DateTime, String, Boolean, Float, Integer, LargeBinary, ForeignKey, func, PickleType, inspect
 from sqlalchemy.ext.mutable import Mutable
-from sqlalchemy.orm import relationship, backref, validates
+from sqlalchemy.orm import relationship, backref, validates, reconstructor
 from sqlalchemy.ext.declarative import declared_attr
 
 from .session import Base, get_cl_session
@@ -71,6 +71,17 @@ class DatabaseItem(object):
         return str(self)
     def __str__(self):
         return f"{self.__class__.__name__}('{self.label}')"
+    def __setattr__(self, name, value):
+        if hasattr(self, "_locked") and self._locked:
+            if name not in ['_sa_instance_state'] and not hasattr(self, name):
+                raise Exception(f"{type(self)} does not have attribute {name}")
+        super().__setattr__(name, value)        
+    def __init__(self, *args, **kwargs):
+        self._locked = True
+        super().__init__(*args, **kwargs)
+    @reconstructor
+    def init_on_load(self):
+        self._locked = True
 
 class ChannelDatabase(Base):
     __tablename__ = "channeldatabase"
@@ -314,6 +325,17 @@ class Channel(Base):
         'polymorphic_identity':'channel',
         'polymorphic_on':type
     }
+    def __setattr__(self, name, value):
+        if hasattr(self, "_locked") and self._locked:
+            if name not in ['_sa_instance_state'] and not hasattr(self, name):
+                raise Exception(f"{type(self)} does not have attribute {name}")
+        super().__setattr__(name, value)        
+    def __init__(self, *args, **kwargs):
+        self._locked = True
+        super().__init__(*args, **kwargs)
+    @reconstructor
+    def init_on_load(self):
+        self._locked = True
 
 class ChannelMixin(object):
     @declared_attr
