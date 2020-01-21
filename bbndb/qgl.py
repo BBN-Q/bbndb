@@ -25,13 +25,15 @@ import numpy as np
 from math import tan, cos, pi
 from copy import deepcopy
 import datetime
+from IPython.display import HTML, display
 
-from sqlalchemy import Column, DateTime, String, Boolean, Float, Integer, LargeBinary, ForeignKey, func, PickleType
+from sqlalchemy import Column, DateTime, String, Boolean, Float, Integer, LargeBinary, ForeignKey, func, PickleType, inspect
 from sqlalchemy.ext.mutable import Mutable
-from sqlalchemy.orm import relationship, backref, validates
+from sqlalchemy.orm import relationship, backref, validates, reconstructor
 from sqlalchemy.ext.declarative import declared_attr
 
-from .session import Base
+from .session import Base, get_cl_session
+from .calibration import Sample, Calibration
 
 class MutableDict(Mutable, dict):
     @classmethod
@@ -69,6 +71,17 @@ class DatabaseItem(object):
         return str(self)
     def __str__(self):
         return f"{self.__class__.__name__}('{self.label}')"
+    def __setattr__(self, name, value):
+        if hasattr(self, "_locked") and self._locked:
+            if name not in ['_sa_instance_state'] and not hasattr(self, name):
+                raise Exception(f"{type(self)} does not have attribute {name}")
+        super().__setattr__(name, value)        
+    def __init__(self, *args, **kwargs):
+        self._locked = True
+        super().__init__(*args, **kwargs)
+    @reconstructor
+    def init_on_load(self):
+        self._locked = True
 
 class ChannelDatabase(Base):
     __tablename__ = "channeldatabase"
@@ -165,6 +178,7 @@ class Receiver(DatabaseItem, Base):
     transceiver_id   = Column(Integer, ForeignKey("transceiver.id"))
     acquire_mode     = Column(String, default="digitizer", nullable=False)
     reference        = Column(String, default="external")
+    reference_freq   = Column(Float, default=10e6)
     stream_sel       = Column(String, nullable = False)
     channels = relationship("PhysicalChannel", back_populates="receiver", cascade="all, delete, delete-orphan")
 
@@ -311,6 +325,17 @@ class Channel(Base):
         'polymorphic_identity':'channel',
         'polymorphic_on':type
     }
+    def __setattr__(self, name, value):
+        if hasattr(self, "_locked") and self._locked:
+            if name not in ['_sa_instance_state'] and not hasattr(self, name):
+                raise Exception(f"{type(self)} does not have attribute {name}")
+        super().__setattr__(name, value)        
+    def __init__(self, *args, **kwargs):
+        self._locked = True
+        super().__init__(*args, **kwargs)
+    @reconstructor
+    def init_on_load(self):
+        self._locked = True
 
 class ChannelMixin(object):
     @declared_attr
@@ -412,7 +437,8 @@ class PhysicalQuadratureChannel(PhysicalChannel, ChannelMixin):
     Q_channel_amp_factor = Column(Float, default=1.0, nullable=False)
     attenuation          = Column(Float, default=0.0, nullable=False)
     channel              = Column(Integer, nullable=False)
-    sequence_file        = Column(String, default="")
+    sequence_file        = Column(String)
+    extra_meta           = Column(MutableDict.as_mutable(PickleType), default={})
 
 class AttenuatorChannel(PhysicalChannel, ChannelMixin):
     """
@@ -433,7 +459,8 @@ class ReceiverChannel(PhysicalChannel, ChannelMixin):
     id = Column(Integer, ForeignKey("physicalchannel.id"), primary_key=True)
 
     channel            = Column(Integer, nullable=False)
-    triggering_chan_id = Column(Integer, ForeignKey("measurement.id"))
+    triggering_chan    = relationship("Measurement", backref='receiver_chan', foreign_keys="[Measurement.receiver_chan_id]")
+    attenuation        = Column(Integer)
 
     def pulse_check(name):
         return name in ["constant", "gaussian", "drag", "gaussOn", "gaussOff", "dragGaussOn", "dragGaussOff",
@@ -491,6 +518,53 @@ class Qubit(LogicalChannel, ChannelMixin):
         for b, f in zip(biases, frequencies):
             self.bias_pairs[b] = f
 
+    def print(self, show=True, verbose=False):
+        ''' Print out table with latest qubit settings and calibrated parameters '''
+        table_code = ""
+        label = self.label if self.label else "Unlabeled"
+        param_dic = {}
+        param_date = {}
+        param_dic['frequency (GHz)'] = round((self.frequency + self.phys_chan.generator.frequency)/1e9,4)
+        params = ['T1', 'T2', 'Readout fid.'] #TODO: pretty print
+        for param in params:
+            s = get_cl_session().query(Sample.id).filter_by(name=self.label).first()
+            if s:
+                c = get_cl_session().query(Calibration.value, Calibration.date).order_by(-Calibration.id).filter_by(sample_id=s[0], name = param)
+                if c.first():
+                    param_dic[param] = round(c.first()[0], 2)
+                    param_date[param]= c.first()[1].strftime("%Y %b. %d %I:%M:%S %p")
+        if verbose:
+            for key in self.pulse_params:
+                param_dic[key] = self.pulse_params[key]
+        for c in param_dic:
+            if c not in param_date:
+                param_date[c] = ''
+            table_code += f"<tr><td>{c}</td><td>{param_dic[c]}</td><td>{param_date[c]}</td></tr>"
+        html = f"<b>{label}</b></br><table style='{{padding:0.5em;}}'><tr><th>Attribute</th><th>Value</th><th>Last Measured</th></tr><tr>{table_code}</tr></table>"
+        #TODO: add edge description (as print event?)
+        if show:
+            display(HTML(html))
+        else:
+            return html
+
+    def print_edges(self, show=True, verbose=False, edges=[]):
+        ''' Print out table with edge data'''
+        label = self.label if self.label else "Unlabeled"
+        param_dic = {}
+        param_date = {}
+        html=f"<b>{label} edges</b></br>"
+        for edge in edges:
+            table_code = ''
+            for key in edge.pulse_params:
+              param_dic[key] = edge.pulse_params[key]
+            for c in param_dic:
+                table_code += f"<tr><td>{c}</td><td>{param_dic[c]}</td></tr>"
+            html+= f"<table style='padding:0.5em; float: left; border: 1px'><tr><th>Attribute</th><th>CNOT({edge.source.label}, {edge.target.label})</th></tr><tr>{table_code}</tr></table>"
+        if show:
+            display(HTML(html))
+        else:
+            return html
+
 class Measurement(LogicalChannel, ChannelMixin):
     '''
     A class for measurement channels.
@@ -508,7 +582,7 @@ class Measurement(LogicalChannel, ChannelMixin):
     control_chan_id = Column(Integer, ForeignKey("qubit.id"))
 
     trig_chan       = relationship("LogicalMarkerChannel", uselist=False, backref="meas_chan", foreign_keys="[LogicalMarkerChannel.meas_chan_id]")
-    receiver_chan   = relationship("ReceiverChannel", uselist=False, backref="triggering_chan", foreign_keys="[ReceiverChannel.triggering_chan_id]")
+    receiver_chan_id = Column(Integer, ForeignKey("receiverchannel.id"))
     processor_chan        = relationship("DigitalInput", uselist=False, backref='input_chan', foreign_keys="DigitalInput.meas_chan_id")
 
     # attenuator_chan = relationship("AttenuatorChannel", uselist=False, backref="measuring_chan", foreign_keys="[AttenuatorChannel.measuring_chan_id]")
