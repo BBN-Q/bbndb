@@ -508,15 +508,21 @@ class Qubit(LogicalChannel, ChannelMixin):
                             'sigma': 5e-9}
         super(Qubit, self).__init__(**kwargs)
 
-    def add_bias_pairs(self, biases, frequencies):
+    def add_bias_pairs(self, biases = None, freqs_q = None, freqs_r = None):
+        if not (biases or freqs_q or freqs_r):
+            biases = [self.bias_source.level]
+            freqs_q  = self.frequency + self.phys_chan.generator.frequency
+            freqs_r = self.measure_chan.frequency + self.measure_chan.phys_chan.generator.frequency
         if not isinstance(biases, list):
             biases = [biases]
-        if not isinstance(frequencies, list):
-            frequencies = [frequencies]
-        if len(frequencies) != len(biases):
-            raise ValueError("Biases and frequencies must have the same length")
-        for b, f in zip(biases, frequencies):
-            self.bias_pairs[b] = f
+        if not isinstance(freqs_q, list):
+            freqs_q = [freqs_q]
+        if not isinstance(freqs_r, list):
+            freqs_r = [freqs_r]
+        if not all(len(l) == len(biases) for l in [freqs_q, freqs_r]):
+             raise ValueError("Biases and frequencies must have the same length")
+        for b, fq, fr in zip(biases, freqs_q, freqs_r):
+            self.bias_pairs[b] = {'freq_q': fq, 'freq_r': fr}
 
     def print(self, show=True, verbose=False):
         ''' Print out table with latest qubit settings and calibrated parameters '''
