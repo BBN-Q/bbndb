@@ -509,6 +509,8 @@ class Qubit(LogicalChannel, ChannelMixin):
         super(Qubit, self).__init__(**kwargs)
 
     def add_bias_pairs(self, biases = None, freqs_q = None, freqs_r = None):
+        '''Add one or more dictionary entries with given biases, qubit frequencies (freqs_q), and readout frequencies (freqs_r). If no inputs are provided, one entry is added with the current settings. Note that these are true frequencies, accounting for any SSB.  
+        '''
         if not (biases or freqs_q or freqs_r):
             biases = [self.bias_source.level]
             freqs_q  = self.frequency + self.phys_chan.generator.frequency
