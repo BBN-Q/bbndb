@@ -75,7 +75,7 @@ class DatabaseItem(object):
         if hasattr(self, "_locked") and self._locked:
             if name not in ['_sa_instance_state'] and not hasattr(self, name):
                 raise Exception(f"{type(self)} does not have attribute {name}")
-        super().__setattr__(name, value)        
+        super().__setattr__(name, value)
     def __init__(self, *args, **kwargs):
         self._locked = True
         super().__init__(*args, **kwargs)
@@ -329,7 +329,7 @@ class Channel(Base):
         if hasattr(self, "_locked") and self._locked:
             if name not in ['_sa_instance_state'] and not hasattr(self, name):
                 raise Exception(f"{type(self)} does not have attribute {name}")
-        super().__setattr__(name, value)        
+        super().__setattr__(name, value)
     def __init__(self, *args, **kwargs):
         self._locked = True
         super().__init__(*args, **kwargs)
@@ -509,12 +509,12 @@ class Qubit(LogicalChannel, ChannelMixin):
         super(Qubit, self).__init__(**kwargs)
 
     def add_bias_pairs(self, biases = None, freqs_q = None, freqs_r = None):
-        '''Add one or more dictionary entries with given biases, qubit frequencies (freqs_q), and readout frequencies (freqs_r). If no inputs are provided, one entry is added with the current settings. Note that these are true frequencies, accounting for any SSB.  
+        '''Add one or more dictionary entries with given biases, qubit frequencies (freqs_q), and readout frequencies (freqs_r). If no inputs are provided, one entry is added with the current settings. Note that these are true frequencies, accounting for any SSB.
         '''
         if not (biases or freqs_q or freqs_r):
             biases = [self.bias_source.level]
             freqs_q  = self.frequency + self.phys_chan.generator.frequency
-            freqs_r = self.measure_chan.frequency + self.measure_chan.phys_chan.generator.frequency
+            freqs_r = self.measure_chan.autodyne_freq + self.measure_chan.phys_chan.generator.frequency
         if not isinstance(biases, list):
             biases = [biases]
         if not isinstance(freqs_q, list):
