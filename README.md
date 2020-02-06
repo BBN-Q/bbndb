@@ -10,11 +10,16 @@ We use *alembic* to facilitate migrations. Examining the `url.sqlalchemy` field 
 sqlalchemy.url = sqlite:///BBN.sqlite
 `
 
-These do not always work with SQLite due to the inability to alter the tables in certain ways. 
+These do not always work with SQLite due to the inability to alter the tables in certain ways.
 
 In the simplest case alembic can be run as follows:
 `bash
 alembic upgrade head
 `
+More generally, follow these steps in order update your database to a newer schema:
+* set the path to your database in alembic.ini `sqlalchemy.url`
+* in your older bbndb branch, type `alembic stamp head`
+* `git checkout` to the newer bbndb branch (or pull from origin)
+* `alembic upgrade head`
 
 For information on how to generate your own migrations, please see *alembic/README*.
