@@ -74,9 +74,9 @@ class DatabaseItem(object):
     def __str__(self):
         return f"{self.__class__.__name__}('{self.label}')"
     def __setattr__(self, name, value):
-        if hasattr(self, "_locked") and self._locked:
-            if name not in ['_sa_instance_state'] and not hasattr(self, name):
-                raise Exception(f"{type(self)} does not have attribute {name}")
+        # if hasattr(self, "_locked") and self._locked:
+        #     if name not in ['_sa_instance_state'] and not hasattr(self, name):
+        #         raise Exception(f"{type(self)} does not have attribute {name}")
         super().__setattr__(name, value)
     def __init__(self, *args, **kwargs):
         self._locked = True
@@ -225,7 +225,8 @@ class Transmitter(DatabaseItem, Base):
     sequence_file    = Column(String)
     transceiver_id   = Column(Integer, ForeignKey("transceiver.id"))
 
-    tx_params = Column(MutableDict.as_mutable(PickleType), default={})
+    # Store various instrument-specific settings here, they will be recursively applied
+    params = Column(MutableDict.as_mutable(PickleType), default={})
 
     channels = relationship("PhysicalChannel", back_populates="transmitter", cascade="all, delete, delete-orphan")
 
@@ -416,7 +417,7 @@ class LogicalChannel(ChannelMixin, Channel):
                self.phys_chan.translator is not None):
                clk_period = 1 / eval(self.phys_chan.translator).MODULATION_CLOCK
                if (params['length'] % clk_period) != 0:
-                   logger.warning('Pulse length of {} is not an integer number of FPGA clock cycles on device with clock period {}; misalignment between channels may occur.'.format(params['length'], clk_period))
+                   print('Pulse length of {} is not an integer number of FPGA clock cycles on device with clock period {}; misalignment between channels may occur.'.format(params['length'], clk_period))
         return params
 
 class PhysicalMarkerChannel(PhysicalChannel, ChannelMixin):
