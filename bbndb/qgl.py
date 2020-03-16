@@ -394,10 +394,17 @@ class LogicalChannel(ChannelMixin, Channel):
 
     phys_chan_id = Column(Integer, ForeignKey("physicalchannel.id"))
     gate_chan_id = Column(Integer, ForeignKey("logicalchannel.id"), nullable=True)
+    parametric_chan_id = Column(Integer, ForeignKey("logicalchannel.id"), nullable=True)
+
     gate_chan    = relationship("LogicalChannel", uselist = False,
                     foreign_keys=[gate_chan_id],
                     remote_side="LogicalChannel.id",
                     backref=backref("gated_chan", uselist=False))
+
+    parametric_chan = relationship("LogicalChannel", uselist = False,
+                    foreign_keys=[parametric_chan_id],
+                    remote_side="LogicalChannel.id",
+                    backref=backref("parametric_linked_chan", uselist=False))
 
 class PhysicalMarkerChannel(PhysicalChannel, ChannelMixin):
     '''
