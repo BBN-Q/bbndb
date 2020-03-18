@@ -141,7 +141,7 @@ class Generator(DatabaseItem, Base):
     power            = Column(Float, nullable=False)
     frequency        = Column(Float, nullable=False)
     reference        = Column(String)
-
+    output           = Column(Boolean, default=True)
     spectrumanalyzer_id = Column(Integer, ForeignKey("spectrumanalyzer.id"))
     DCsource_id = Column(Integer, ForeignKey('dcsource.id'))
 
