@@ -212,6 +212,9 @@ class Integrate(FilterProxy, NodeMixin):
     # Built in frequency for demodulation
     demod_frequency = Column(Float, default=0.0, nullable=False)
 
+class Correlate(FilterProxy, NodeMixin):
+    id = Column(Integer, ForeignKey("filterproxy.id"), primary_key=True)
+
 class OutputProxy(FilterProxy, NodeMixin):
     id = Column(Integer, ForeignKey("filterproxy.id"), primary_key=True)
 
