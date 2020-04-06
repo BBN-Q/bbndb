@@ -236,6 +236,7 @@ class Write(OutputProxy, NodeMixin):
     id = Column(Integer, ForeignKey("outputproxy.id"), primary_key=True)
     filename      = Column(String,  default = "output.auspex", nullable=False)
     groupname     = Column(String,  default = "main", nullable=False)
+    datasetname   = Column(String,  default = "data", nullable=False)
     add_date      = Column(Boolean, default = False, nullable=False)
     # save_settings = Column(Boolean, default = True, nullable=False)
 
