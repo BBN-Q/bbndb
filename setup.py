@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='bbndb',
-    version='2019.1',
+    version='2020.1',
     author='Graham Rowlands',
     scripts=[],
     packages=['bbndb'],
@@ -16,7 +16,7 @@ setup(
 		"sqlalchemy >= 1.2.15",
 		"numpy >= 1.12.1",
 		"networkx >= 1.11",
-        "IPython"
+        "alembic"
     ],
     classifiers=[
         "Development Status :: 4 - Beta",

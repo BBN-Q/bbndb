@@ -1,3 +1,4 @@
 sqlalchemy >= 1.2.15
 numpy >= 1.11.1
 networkx >= 1.11
+alembic 

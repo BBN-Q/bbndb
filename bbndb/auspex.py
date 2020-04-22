@@ -98,8 +98,8 @@ class FilterProxy(NodeMixin, NodeProxy):
         return filter_obj
 
     def drop(self):
-        desc = list(nx.algorithms.dag.descendants(self.pipelineMgr.meas_graph, str(self)))
-        desc.append(str(self))
+        desc = list(nx.algorithms.dag.descendants(self.pipelineMgr.meas_graph, self.hash_val))
+        desc.append(self.hash_val)
         for n in desc:
             # n.exp = None
             n = self.pipelineMgr.meas_graph.nodes[n]['node_obj']
@@ -212,6 +212,9 @@ class Integrate(FilterProxy, NodeMixin):
     # Built in frequency for demodulation
     demod_frequency = Column(Float, default=0.0, nullable=False)
 
+class Correlate(FilterProxy, NodeMixin):
+    id = Column(Integer, ForeignKey("filterproxy.id"), primary_key=True)
+
 class OutputProxy(FilterProxy, NodeMixin):
     id = Column(Integer, ForeignKey("filterproxy.id"), primary_key=True)
 
@@ -233,6 +236,7 @@ class Write(OutputProxy, NodeMixin):
     id = Column(Integer, ForeignKey("outputproxy.id"), primary_key=True)
     filename      = Column(String,  default = "output.auspex", nullable=False)
     groupname     = Column(String,  default = "main", nullable=False)
+    datasetname   = Column(String,  default = "data", nullable=False)
     add_date      = Column(Boolean, default = False, nullable=False)
     # save_settings = Column(Boolean, default = True, nullable=False)
 
@@ -330,7 +334,7 @@ class StreamSelect(NodeMixin, NodeProxy):
         Output = Buffer if buffers else Write
         if average:
             if self.stream_type.lower() == "raw":
-                self.add(Demodulate()).add(Integrate()).add(Average()).add(Output(groupname=self.qubit_name+'-raw_int'))
+                self.add(Demodulate(label=f"Demodulate {self.qubit_name}")).add(Integrate()).add(Average()).add(Output(groupname=self.qubit_name+'-raw_int'))
             if self.stream_type.lower() == "demodulated":
                 self.add(Integrate()).add(Average()).add(Output(groupname=self.qubit_name+'-demod_int'))
             if self.stream_type.lower() == "integrated":

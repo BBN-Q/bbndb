@@ -25,16 +25,15 @@ import numpy as np
 from math import tan, cos, pi
 from copy import deepcopy
 import datetime
-import logging
+from IPython.display import HTML, display
 
-logger = logging.getLogger(__name__)
-
-from sqlalchemy import Column, DateTime, String, Boolean, Float, Integer, LargeBinary, ForeignKey, func, PickleType
+from sqlalchemy import Column, DateTime, String, Boolean, Float, Integer, LargeBinary, ForeignKey, func, PickleType, inspect
 from sqlalchemy.ext.mutable import Mutable
-from sqlalchemy.orm import relationship, backref, validates
+from sqlalchemy.orm import relationship, backref, validates, reconstructor
 from sqlalchemy.ext.declarative import declared_attr
 
-from .session import Base
+from .session import Base, get_cl_session
+from .calibration import Sample, Calibration
 
 from QGL.drivers import APSPattern, APS2Pattern, APS3Pattern
 
@@ -74,6 +73,17 @@ class DatabaseItem(object):
         return str(self)
     def __str__(self):
         return f"{self.__class__.__name__}('{self.label}')"
+    def __setattr__(self, name, value):
+        if hasattr(self, "_locked") and self._locked:
+            if name not in ['_sa_instance_state'] and not hasattr(self, name):
+                raise Exception(f"{type(self)} does not have attribute {name}")
+        super().__setattr__(name, value)
+    def __init__(self, *args, **kwargs):
+        self._locked = True
+        super().__init__(*args, **kwargs)
+    @reconstructor
+    def init_on_load(self):
+        self._locked = True
 
 class ChannelDatabase(Base):
     __tablename__ = "channeldatabase"
@@ -81,6 +91,7 @@ class ChannelDatabase(Base):
 
     label        = Column(String, nullable=False)
     time         = Column(DateTime)
+    notes        = Column(String)
 
     channels           = relationship("Channel", backref="channel_db", cascade="all, delete, delete-orphan")
     generators         = relationship("Generator", backref="channel_db", cascade="all, delete, delete-orphan")
@@ -132,7 +143,7 @@ class Generator(DatabaseItem, Base):
     power            = Column(Float, nullable=False)
     frequency        = Column(Float, nullable=False)
     reference        = Column(String)
-
+    output           = Column(Boolean, default=True)
     spectrumanalyzer_id = Column(Integer, ForeignKey("spectrumanalyzer.id"))
     DCsource_id = Column(Integer, ForeignKey('dcsource.id'))
 
@@ -152,6 +163,7 @@ class DCSource(DatabaseItem, Base):
     mode      = Column(String, default='current')
     pump_source = relationship("Generator", uselist=False, foreign_keys="[Generator.DCsource_id]")
     phys_chans  = relationship('PhysicalChannel', back_populates = 'DCsource')
+    qubit_id = Column(Integer, ForeignKey("qubit.id"))
 
 class Receiver(DatabaseItem, Base):
     """A receiver , or generally an analog to digitial converter"""
@@ -168,6 +180,7 @@ class Receiver(DatabaseItem, Base):
     transceiver_id   = Column(Integer, ForeignKey("transceiver.id"))
     acquire_mode     = Column(String, default="digitizer", nullable=False)
     reference        = Column(String, default="external")
+    reference_freq   = Column(Float, default=10e6)
     stream_sel       = Column(String, nullable = False)
     channels = relationship("PhysicalChannel", back_populates="receiver", cascade="all, delete, delete-orphan")
 
@@ -208,7 +221,6 @@ class Transmitter(DatabaseItem, Base):
 
     trigger_interval = Column(Float, default=100e-6, nullable=False)
     trigger_source   = Column(String, default="external", nullable=False)
-    delay            = Column(Float, default=0.0, nullable=False)
     master           = Column(Boolean, default=False, nullable=False)
     sequence_file    = Column(String)
     transceiver_id   = Column(Integer, ForeignKey("transceiver.id"))
@@ -243,13 +255,36 @@ class Transmitter(DatabaseItem, Base):
         # return self.get_chan(value)
 
 class Processor(DatabaseItem, Base):
-    """A hardware unit used for signal processing, e.g. a TDM"""
+    """A hardware unit used for signal processing, e.g. a TDM
+        model: currently TDM is the only supported model
+        address: instrument address (string)
+        master: true if trigger master (boolean)
+        trigger_interval: (s)
+        trigger_source: internal / external (string)
+        channels: digital inputs (typically carrying the results of qubit state assignment). Used to map meas. results into memory (see QGL.PulsePrimitives.MEASA)
+    """
     model            = Column(String, nullable=False)
     address          = Column(String)
     transceiver_id   = Column(Integer, ForeignKey("transceiver.id"))
     master           = Column(Boolean, default=False, nullable=False)
     trigger_interval = Column(Float, default=100e-6, nullable=False)
     trigger_source   = Column(String, default="internal", nullable=False)
+    channels         = relationship("DigitalInput", back_populates="processor", cascade="all, delete, delete-orphan")
+
+    def get_chan(self, name):
+        if isinstance(name, int):
+            name = f"-{name}"
+        matches = [c for c in self.channels if c.label.endswith(name)]
+        if len(matches) == 0:
+            raise ValueError(f"Could not find an input channel name on processor {self.label} ending with {name}")
+        elif len(matches) > 1:
+            raise ValueError(f"Found {len(matches)} matches for input channels on processor {self.label} whose names end with {name}")
+        else:
+            return matches[0]
+    def ch(self, name):
+        return self.get_chan(name)
+    def __getitem__(self, value):
+        return self.get_chan(value)
 
 class Transceiver(DatabaseItem, Base):
     """A single machine or rack of a2ds and d2as that we want to treat as a unit."""
@@ -265,7 +300,7 @@ class Transceiver(DatabaseItem, Base):
         return self.get_thing("transmitters", name)
 
     def rx(self, name):
-        return self.get_thing("receviers", name)
+        return self.get_thing("receivers", name)
 
     def px(self, name):
         return self.get_thing("processors", name)
@@ -295,6 +330,17 @@ class Channel(Base):
         'polymorphic_identity':'channel',
         'polymorphic_on':type
     }
+    def __setattr__(self, name, value):
+        if hasattr(self, "_locked") and self._locked:
+            if name not in ['_sa_instance_state'] and not hasattr(self, name):
+                raise Exception(f"{type(self)} does not have attribute {name}")
+        super().__setattr__(name, value)
+    def __init__(self, *args, **kwargs):
+        self._locked = True
+        super().__init__(*args, **kwargs)
+    @reconstructor
+    def init_on_load(self):
+        self._locked = True
 
 class ChannelMixin(object):
     @declared_attr
@@ -353,11 +399,16 @@ class LogicalChannel(ChannelMixin, Channel):
 
     phys_chan_id = Column(Integer, ForeignKey("physicalchannel.id"))
     gate_chan_id = Column(Integer, ForeignKey("logicalchannel.id"), nullable=True)
+    parametric_chan_id = Column(Integer, ForeignKey("logicalchannel.id"), nullable=True)
+
     gate_chan    = relationship("LogicalChannel", uselist = False,
                     foreign_keys=[gate_chan_id],
                     remote_side="LogicalChannel.id",
                     backref=backref("gated_chan", uselist=False))
-
+    parametric_chan = relationship("LogicalChannel", uselist = False,
+                    foreign_keys=[parametric_chan_id],
+                    remote_side="LogicalChannel.id",
+                    backref=backref("parametric_linked_chan", uselist=False))
     @validates('pulse_params')
     def validate_pulse_params(self, key, params):
         if isinstance(self, Qubit):
@@ -386,6 +437,17 @@ class PhysicalMarkerChannel(PhysicalChannel, ChannelMixin):
     sequence_file  = Column(String)
     channel        = Column(Integer, nullable=False)
 
+class DigitalInput(PhysicalChannel, ChannelMixin):
+    '''
+    A digital input channel on a Processor.
+    '''
+    id = Column(Integer, ForeignKey("physicalchannel.id"), primary_key=True)
+    channel       = Column(Integer, nullable=False)
+
+    processor_id   = Column(Integer, ForeignKey("processor.id"))
+    meas_chan_id = Column(Integer, ForeignKey("measurement.id"))
+    processor    = relationship("Processor", back_populates="channels")
+
 class PhysicalQuadratureChannel(PhysicalChannel, ChannelMixin):
     '''
     Something used to implement a standard qubit channel with two analog channels and a microwave gating channel.
@@ -400,7 +462,8 @@ class PhysicalQuadratureChannel(PhysicalChannel, ChannelMixin):
     Q_channel_amp_factor = Column(Float, default=1.0, nullable=False)
     attenuation          = Column(Float, default=0.0, nullable=False)
     channel              = Column(Integer, nullable=False)
-    sequence_file        = Column(String, default="")
+    sequence_file        = Column(String)
+    extra_meta           = Column(MutableDict.as_mutable(PickleType), default={})
 
 class AttenuatorChannel(PhysicalChannel, ChannelMixin):
     """
@@ -421,7 +484,8 @@ class ReceiverChannel(PhysicalChannel, ChannelMixin):
     id = Column(Integer, ForeignKey("physicalchannel.id"), primary_key=True)
 
     channel            = Column(Integer, nullable=False)
-    triggering_chan_id = Column(Integer, ForeignKey("measurement.id"))
+    triggering_chan    = relationship("Measurement", backref='receiver_chan', foreign_keys="[Measurement.receiver_chan_id]")
+    attenuation        = Column(Integer)
 
     def pulse_check(name):
         return name in ["constant", "gaussian", "drag", "gaussOn", "gaussOff", "dragGaussOn", "dragGaussOff",
@@ -455,6 +519,8 @@ class Qubit(LogicalChannel, ChannelMixin):
     edge_source  = relationship("Edge", backref="source", foreign_keys="[Edge.source_id]")
     edge_target  = relationship("Edge", backref="target", foreign_keys="[Edge.target_id]")
     measure_chan = relationship("Measurement", uselist=False, backref="control_chan", foreign_keys="[Measurement.control_chan_id]")
+    bias_source = relationship("DCSource", uselist=False, backref = "qubit", foreign_keys="DCSource.qubit_id")
+    bias_pairs = Column(MutableDict.as_mutable(PickleType), default={}, nullable=True)
 
     def __init__(self, **kwargs):
         if "pulse_params" not in kwargs.keys():
@@ -467,6 +533,71 @@ class Qubit(LogicalChannel, ChannelMixin):
                             'sigma': 5e-9}
         super(Qubit, self).__init__(**kwargs)
 
+    def add_bias_pairs(self, biases = None, freqs_q = None, freqs_r = None):
+        '''Add one or more dictionary entries with given biases, qubit frequencies (freqs_q), and readout frequencies (freqs_r). If no inputs are provided, one entry is added with the current settings. Note that these are true frequencies, accounting for any SSB.
+        '''
+        if not (biases or freqs_q or freqs_r):
+            biases = [self.bias_source.level]
+            freqs_q  = self.frequency + self.phys_chan.generator.frequency
+            freqs_r = self.measure_chan.autodyne_freq + self.measure_chan.phys_chan.generator.frequency
+        if not isinstance(biases, list):
+            biases = [biases]
+        if not isinstance(freqs_q, list):
+            freqs_q = [freqs_q]
+        if not isinstance(freqs_r, list):
+            freqs_r = [freqs_r]
+        if not all(len(l) == len(biases) for l in [freqs_q, freqs_r]):
+             raise ValueError("Biases and frequencies must have the same length")
+        for b, fq, fr in zip(biases, freqs_q, freqs_r):
+            self.bias_pairs[b] = {'freq_q': fq, 'freq_r': fr}
+
+    def print(self, show=True, verbose=False):
+        ''' Print out table with latest qubit settings and calibrated parameters '''
+        table_code = ""
+        label = self.label if self.label else "Unlabeled"
+        param_dic = {}
+        param_date = {}
+        param_dic['frequency (GHz)'] = round((self.frequency + self.phys_chan.generator.frequency)/1e9,4)
+        params = ['T1', 'T2', 'Readout fid.'] #TODO: pretty print
+        for param in params:
+            s = get_cl_session().query(Sample.id).filter_by(name=self.label).first()
+            if s:
+                c = get_cl_session().query(Calibration.value, Calibration.date).order_by(-Calibration.id).filter_by(sample_id=s[0], name = param)
+                if c.first():
+                    param_dic[param] = round(c.first()[0], 2)
+                    param_date[param]= c.first()[1].strftime("%Y %b. %d %I:%M:%S %p")
+        if verbose:
+            for key in self.pulse_params:
+                param_dic[key] = self.pulse_params[key]
+        for c in param_dic:
+            if c not in param_date:
+                param_date[c] = ''
+            table_code += f"<tr><td>{c}</td><td>{param_dic[c]}</td><td>{param_date[c]}</td></tr>"
+        html = f"<b>{label}</b></br><table style='{{padding:0.5em;}}'><tr><th>Attribute</th><th>Value</th><th>Last Measured</th></tr><tr>{table_code}</tr></table>"
+        #TODO: add edge description (as print event?)
+        if show:
+            display(HTML(html))
+        else:
+            return html
+
+    def print_edges(self, show=True, verbose=False, edges=[]):
+        ''' Print out table with edge data'''
+        label = self.label if self.label else "Unlabeled"
+        param_dic = {}
+        param_date = {}
+        html=f"<b>{label} edges</b></br>"
+        for edge in edges:
+            table_code = ''
+            for key in edge.pulse_params:
+              param_dic[key] = edge.pulse_params[key]
+            for c in param_dic:
+                table_code += f"<tr><td>{c}</td><td>{param_dic[c]}</td></tr>"
+            html+= f"<table style='padding:0.5em; float: left; border: 1px'><tr><th>Attribute</th><th>CNOT({edge.source.label}, {edge.target.label})</th></tr><tr>{table_code}</tr></table>"
+        if show:
+            display(HTML(html))
+        else:
+            return html
+
 class Measurement(LogicalChannel, ChannelMixin):
     '''
     A class for measurement channels.
@@ -474,7 +605,7 @@ class Measurement(LogicalChannel, ChannelMixin):
     autodyne which needs an IQ pair or hetero/homodyne which needs just a marker channel.
         meas_type: Type of measurement (autodyne, homodyne)
         autodyne_freq: use to bake the modulation into the pulse, so that it has constant phase
-        frequency: use to asssociate modulation with the channel
+        frequency: use to associate modulation with the channel
     '''
     id = Column(Integer, ForeignKey("logicalchannel.id"), primary_key=True)
 
@@ -484,8 +615,15 @@ class Measurement(LogicalChannel, ChannelMixin):
     control_chan_id = Column(Integer, ForeignKey("qubit.id"))
 
     trig_chan       = relationship("LogicalMarkerChannel", uselist=False, backref="meas_chan", foreign_keys="[LogicalMarkerChannel.meas_chan_id]")
-    receiver_chan   = relationship("ReceiverChannel", uselist=False, backref="triggering_chan", foreign_keys="[ReceiverChannel.triggering_chan_id]")
+    receiver_chan_id = Column(Integer, ForeignKey("receiverchannel.id"))
+    processor_chan        = relationship("DigitalInput", uselist=False, backref='input_chan', foreign_keys="DigitalInput.meas_chan_id")
+
     # attenuator_chan = relationship("AttenuatorChannel", uselist=False, backref="measuring_chan", foreign_keys="[AttenuatorChannel.measuring_chan_id]")
+    @validates('frequency')
+    def validate_frequency(self, key, value):
+        if value!=0 and self.meas_type == 'autodyne':
+            warnings.warn('Setting modulation frequency for an autodyne measurement. Are you sure you don\'t want to set autodyne_freq instead?')
+        return value
 
     @validates('meas_type')
     def validate_meas_type(self, key, source):
@@ -508,11 +646,13 @@ class Edge(LogicalChannel, ChannelMixin):
 
     An Edge is also effectively an abstract channel, so it carries the same properties as a
     Qubit channel.
+        cnot_impl: string with the chosen, edge-specific CNOT implementation.  If defined, it overrides the default implementation set in QGL/config.py
     '''
     id = Column(Integer, ForeignKey("logicalchannel.id"), primary_key=True)
 
     source_id = Column(Integer, ForeignKey("qubit.id"))
     target_id = Column(Integer, ForeignKey("qubit.id"))
+    cnot_impl = Column(String, nullable = True)
 
     def __init__(self, **kwargs):
         if "pulse_params" not in kwargs.keys():
