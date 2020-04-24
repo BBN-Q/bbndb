@@ -213,6 +213,12 @@ class Integrate(FilterProxy, NodeMixin):
     demod_frequency = Column(Float, default=0.0, nullable=False)
 
 class Correlate(FilterProxy, NodeMixin):
+    def __init__(self, pipelineMgr=None, **kwargs):
+        global __current_pipeline__
+        super(Correlate, self).__init__(**kwargs)
+        self.pipelineMgr = pipelineMgr
+        __current_pipeline__ = pipelineMgr
+
     id = Column(Integer, ForeignKey("filterproxy.id"), primary_key=True)
 
 class OutputProxy(FilterProxy, NodeMixin):
