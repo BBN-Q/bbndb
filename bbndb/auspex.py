@@ -76,13 +76,15 @@ class NodeMixin(object):
         return f"{self.__class__.__name__}('{self.label}')"
 
 class FilterProxy(NodeMixin, NodeProxy):
-    """docstring for FilterProxy"""
+    """Common functionality for convenient declaration of child classes."""
 
     def __init__(self, **kwargs):
         global __current_pipeline__
-        # with db_session:
-        super(FilterProxy, self).__init__(**kwargs)
-        self.pipelineMgr = __current_pipeline__
+        self.pipelineMgr = __current_pipeline__        
+        if "pipelineMgr" in kwargs.keys():
+            if kwargs["pipelineMgr"] is None:
+                raise Exception("Cannot set pipelineMgr to None, this has serious consequences")
+        super().__init__(**kwargs)
 
     def add(self, filter_obj, connector_out="source", connector_in="sink"):
         # if not self.pipeline:
@@ -213,12 +215,6 @@ class Integrate(FilterProxy, NodeMixin):
     demod_frequency = Column(Float, default=0.0, nullable=False)
 
 class Correlate(FilterProxy, NodeMixin):
-    def __init__(self, pipelineMgr=None, **kwargs):
-        global __current_pipeline__
-        super(Correlate, self).__init__(**kwargs)
-        self.pipelineMgr = pipelineMgr
-        __current_pipeline__ = pipelineMgr
-
     id = Column(Integer, ForeignKey("filterproxy.id"), primary_key=True)
 
 class OutputProxy(FilterProxy, NodeMixin):
@@ -254,7 +250,7 @@ class Buffer(OutputProxy, NodeMixin):
     def __init__(self, **kwargs):
         if "groupname" in kwargs:
             kwargs.pop("groupname")
-        super(Buffer, self).__init__(**kwargs)
+        super().__init__(**kwargs)
 
 class StreamSelect(NodeMixin, NodeProxy):
     """docstring for FilterProxy"""
@@ -302,13 +298,15 @@ class StreamSelect(NodeMixin, NodeProxy):
         return locals()
     kernel = property(**kernel())
 
-    def __init__(self, pipelineMgr=None, **kwargs):
+    def __init__(self, **kwargs):
         global __current_pipeline__
-        super(StreamSelect, self).__init__(**kwargs)
-        self.pipelineMgr = pipelineMgr
-        __current_pipeline__ = pipelineMgr
+        self.pipelineMgr = __current_pipeline__
+        if "pipelineMgr" in kwargs.keys():
+            if kwargs["pipelineMgr"] is None:
+                raise Exception("Cannot set pipelineMgr to None, this has serious consequences")
         self.digitizer_settings = None
         self.available_streams = None
+        super().__init__(**kwargs)
 
     def add(self, filter_obj, connector_out="source", connector_in="sink"):
         # if not self.pipeline:
