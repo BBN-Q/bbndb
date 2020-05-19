@@ -143,7 +143,7 @@ class Generator(DatabaseItem, Base):
     power            = Column(Float, nullable=False)
     frequency        = Column(Float, nullable=False)
     reference        = Column(String)
-
+    output           = Column(Boolean, default=True)
     spectrumanalyzer_id = Column(Integer, ForeignKey("spectrumanalyzer.id"))
     DCsource_id = Column(Integer, ForeignKey('dcsource.id'))
 
@@ -400,6 +400,8 @@ class LogicalChannel(ChannelMixin, Channel):
 
     phys_chan_id = Column(Integer, ForeignKey("physicalchannel.id"))
     gate_chan_id = Column(Integer, ForeignKey("logicalchannel.id"), nullable=True)
+    parametric_chan_id = Column(Integer, ForeignKey("logicalchannel.id"), nullable=True)
+
     gate_chan    = relationship("LogicalChannel", uselist = False,
                     foreign_keys=[gate_chan_id],
                     remote_side="LogicalChannel.id",
