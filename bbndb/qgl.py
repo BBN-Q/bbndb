@@ -600,6 +600,16 @@ class Measurement(LogicalChannel, ChannelMixin):
     receiver_chan_id = Column(Integer, ForeignKey("receiverchannel.id"))
     processor_chan        = relationship("DigitalInput", uselist=False, backref='input_chan', foreign_keys="DigitalInput.meas_chan_id")
 
+    @property
+    def autodyne_frequency(self):
+        raise ValueError("`autodyne_frequency` is not a valid property of a Measurement. Did you mean `autodyne_freq?'")
+        return None 
+
+    @autodyne_frequency.setter
+    def autodyne_frequency(self, value):
+        raise ValueError("`autodyne_frequency` is not a valid property of a Measurement. Did you mean `autodyne_freq?'")
+        return None 
+
     # attenuator_chan = relationship("AttenuatorChannel", uselist=False, backref="measuring_chan", foreign_keys="[AttenuatorChannel.measuring_chan_id]")
     @validates('frequency')
     def validate_frequency(self, key, value):
