@@ -11,7 +11,8 @@ config = context.config
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
-fileConfig(config.config_file_name)
+if False:
+    fileConfig(config.config_file_name)
 
 # add your model's MetaData object here
 # for 'autogenerate' support
@@ -29,7 +30,7 @@ def get_url():
     if url:
         url = "sqlite:///" + url
     else:
-        print("Assuming default database location from alembic.ini")
+        # print("Assuming default database location from alembic.ini")
         url = config.get_main_option("sqlalchemy.url")
     # assert url, "Database URL must be specified on command line with -x url=<DB_URL>"
     return url

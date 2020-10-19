@@ -2,7 +2,7 @@ from QGL import *
 from auspex.qubit import *
 import bbndb
 
-cl = ChannelLibrary(db_resource_name="BBN.sqlite")
+cl = ChannelLibrary("BBN")
 pl = PipelineManager()
 
 # Create five qubits and supporting hardware
