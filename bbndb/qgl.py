@@ -27,8 +27,8 @@ from copy import deepcopy
 import datetime
 from IPython.display import HTML, display
 
-from sqlalchemy import Column, DateTime, String, Boolean, Float, Integer, LargeBinary, ForeignKey, func, PickleType, inspect
-from sqlalchemy.ext.mutable import Mutable
+from sqlalchemy import Table, Column, DateTime, String, Boolean, Float, Integer, LargeBinary, ForeignKey, func, PickleType, inspect
+from sqlalchemy.ext.mutable import Mutable, MutableList
 from sqlalchemy.orm import relationship, backref, validates, reconstructor
 from sqlalchemy.ext.declarative import declared_attr
 
@@ -658,3 +658,36 @@ class Edge(LogicalChannel, ChannelMixin):
             return True
         else:
             return False
+
+
+parametric_qubits = Table('parametric_qubits', Base.metadata, 
+    Column("qubit", Integer, ForeignKey("qubit.id")), 
+    Column("param_drive", Integer, ForeignKey("parametricdrive.id"))
+)
+
+class ParametricDrive(LogicalChannel, ChannelMixin):
+    """
+    Defines a parametric drive on one ore more qubits.
+    """
+
+    id = Column(Integer, ForeignKey("logicalchannel.id"), primary_key=True)
+
+    autodyne_freq = Column(MutableList.as_mutable(PickleType), default=[0.0], nullable=False)
+
+    qubits = relationship('Qubit', secondary=parametric_qubits, backref="parametric_drives")
+
+    def __init__(self, **kwargs):
+        if "pulse_params" not in kwargs.keys():
+            kwargs["pulse_params"] =   {'length': 20e-9,
+                                        'amp': 1.0,
+                                        'phase': 0.0,
+                                        'shape_fun': "gaussian",
+                                        'cutoff': 2,
+                                        'drag_scaling': 0,
+                                        'sigma': 5e-9,
+                                        'riseFall': 20e-9}
+        super().__init__(**kwargs)
+
+
+
+
