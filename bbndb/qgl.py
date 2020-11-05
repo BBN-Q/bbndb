@@ -660,8 +660,8 @@ class Edge(LogicalChannel, ChannelMixin):
             return False
 
 
-parametric_qubits = Table('parametric_qubits', Base.metadata, 
-    Column("qubit", Integer, ForeignKey("qubit.id")), 
+parametric_qubits = Table('parametric_qubits', Base.metadata,
+    Column("qubit", Integer, ForeignKey("qubit.id")),
     Column("param_drive", Integer, ForeignKey("parametricdrive.id"))
 )
 
@@ -673,7 +673,7 @@ class ParametricDrive(LogicalChannel, ChannelMixin):
     id = Column(Integer, ForeignKey("logicalchannel.id"), primary_key=True)
 
     autodyne_freq = Column(MutableList.as_mutable(PickleType), default=[0.0], nullable=False)
-
+    amp_factor = Column(MutableList.as_mutable(PickleType), default=[1.0], nullable=False)
     qubits = relationship('Qubit', secondary=parametric_qubits, backref="parametric_drives")
 
     def __init__(self, **kwargs):
@@ -687,7 +687,3 @@ class ParametricDrive(LogicalChannel, ChannelMixin):
                                         'sigma': 5e-9,
                                         'riseFall': 20e-9}
         super().__init__(**kwargs)
-
-
-
-
