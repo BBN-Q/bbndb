@@ -291,11 +291,40 @@ class Transceiver(DatabaseItem, Base):
     transmitters = relationship("Transmitter", backref="transceiver")
     processors   = relationship("Processor", backref="transceiver")
 
+    @property
+    def number_samples(self):
+        if len(set([r.record_length for r in self.receivers])) > 1:
+            print("Warning: different number of samples specified on different instruments. Returning first instrument's value.")
+        return self.receivers[0].record_length
+    @number_samples.setter
+    def number_samples(self, value):
+        for r in self.receivers:
+            r.record_length = value
+
+    @property
+    def trigger_interval(self):
+        if len(set([r.trigger_interval for r in self.transmitters])) > 1:
+            print("Warning: different trigger intervals specified on different instruments. Returning first instrument's value.")
+        return self.transmitters[0].trigger_interval
+    @trigger_interval.setter
+    def trigger_interval(self, value):
+        for r in self.transmitters:
+            r.trigger_interval = value
+
     def tx(self, name):
+        if len(self.transmitters) == 1 and isinstance(name, int):
+            return self.transmitters[0].get_chan(f"-Tx{name:02d}-1")
         return self.get_thing("transmitters", name)
 
     def rx(self, name):
+        if len(self.receivers) == 1 and isinstance(name, int):
+            return self.receivers[0].get_chan(f"-{name:02d}")
         return self.get_thing("receivers", name)
+
+    def mark(self, name):
+        if len(self.transmitters) == 1 and isinstance(name, int):
+            return self.transmitters[0].get_chan(f"-Tx{name:02d}-M")
+        return self.get_thing("transmitters", name)
 
     def px(self, name):
         return self.get_thing("processors", name)
