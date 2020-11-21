@@ -35,6 +35,8 @@ from sqlalchemy.ext.declarative import declared_attr
 from .session import Base, get_cl_session
 from .calibration import Sample, Calibration
 
+from QGL.drivers import APSPattern, APS2Pattern, APS3Pattern
+
 class MutableDict(Mutable, dict):
     @classmethod
     def coerce(cls, key, value):
@@ -72,9 +74,9 @@ class DatabaseItem(object):
     def __str__(self):
         return f"{self.__class__.__name__}('{self.label}')"
     def __setattr__(self, name, value):
-        if hasattr(self, "_locked") and self._locked:
-            if name not in ['_sa_instance_state'] and not hasattr(self, name):
-                raise Exception(f"{type(self)} does not have attribute {name}")
+        # if hasattr(self, "_locked") and self._locked:
+        #     if name not in ['_sa_instance_state'] and not hasattr(self, name):
+        #         raise Exception(f"{type(self)} does not have attribute {name}")
         super().__setattr__(name, value)
     def __init__(self, *args, **kwargs):
         self._locked = True
@@ -216,11 +218,15 @@ class Transmitter(DatabaseItem, Base):
     """An arbitrary waveform generator, or generally a digital to analog converter"""
     model            = Column(String, nullable=False)
     address          = Column(String)
+
     trigger_interval = Column(Float, default=100e-6, nullable=False)
     trigger_source   = Column(String, default="external", nullable=False)
     master           = Column(Boolean, default=False, nullable=False)
     sequence_file    = Column(String)
     transceiver_id   = Column(Integer, ForeignKey("transceiver.id"))
+
+    # Store various instrument-specific settings here, they will be recursively applied
+    params = Column(MutableDict.as_mutable(PickleType), default={})
 
     channels = relationship("PhysicalChannel", back_populates="transmitter", cascade="all, delete, delete-orphan")
 
@@ -430,10 +436,20 @@ class LogicalChannel(ChannelMixin, Channel):
                     remote_side="LogicalChannel.id",
                     backref=backref("gated_chan", uselist=False))
 
-    parametric_chan = relationship("LogicalChannel", uselist = False,
-                    foreign_keys=[parametric_chan_id],
-                    remote_side="LogicalChannel.id",
-                    backref=backref("parametric_linked_chan", uselist=False))
+    @validates('pulse_params')
+    def validate_pulse_params(self, key, params):
+        if isinstance(self, Qubit):
+            if (params is not None and
+                'length' in params and
+               params['length'] is not None and
+               hasattr(self, 'phys_chan') and
+               self.phys_chan is not None and
+               hasattr(self.phys_chan, 'translator') and
+               self.phys_chan.translator is not None):
+               clk_period = 1 / eval(self.phys_chan.translator).MODULATION_CLOCK
+               if (params['length'] % clk_period) != 0:
+                   print('Pulse length of {} is not an integer number of FPGA clock cycles on device with clock period {}; misalignment between channels may occur.'.format(params['length'], clk_period))
+        return params
 
 class PhysicalMarkerChannel(PhysicalChannel, ChannelMixin):
     '''
