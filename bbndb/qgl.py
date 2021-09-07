@@ -222,6 +222,7 @@ class Transmitter(DatabaseItem, Base):
     sequence_file    = Column(String)
     transceiver_id   = Column(Integer, ForeignKey("transceiver.id"))
 
+    serial_port=Column(String)
     channels = relationship("PhysicalChannel", back_populates="transmitter", cascade="all, delete, delete-orphan")
 
     @validates('trigger_source')
