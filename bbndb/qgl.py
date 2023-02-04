@@ -222,6 +222,12 @@ class Transmitter(DatabaseItem, Base):
     sequence_file    = Column(String)
     transceiver_id   = Column(Integer, ForeignKey("transceiver.id"))
 
+    serial_port = Column(String)
+    dac = Column(Integer)
+
+    # Store various instrument-specific settings here, they will be recursively applied
+    params = Column(MutableDict.as_mutable(PickleType), default={})
+    
     channels = relationship("PhysicalChannel", back_populates="transmitter", cascade="all, delete, delete-orphan")
 
     @validates('trigger_source')
@@ -290,6 +296,7 @@ class Transceiver(DatabaseItem, Base):
     receivers    = relationship("Receiver", backref="transceiver")
     transmitters = relationship("Transmitter", backref="transceiver")
     processors   = relationship("Processor", backref="transceiver")
+    # params = Column(MutableDict.as_mutable(PickleType), default={})
 
     @property
     def number_samples(self):
